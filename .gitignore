@@ -321,6 +321,7 @@ lib_managed/
 src_managed/
 project/boot/
 project/plugins/project/
+project
 
 # Scala-IDE specific
 .scala_dependencies
@@ -339,3 +340,15 @@ project/plugins/project/
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 
+# chisel generated files
+sv-gen/
+
+# scalafmt config file
+.scalafmt.conf
+
+# lsp stuffs
+.metals
+.bloop
+
+# simulation output
+simu-out/
