@@ -4,8 +4,8 @@ import chisel3._
 import chisel3.util._
 import _root_.circt.stage.ChiselStage
 
-/* This is a basic stack implementation, with a register holding the top element
- * of the stack, allowing asynchronous-read for its top element. */
+/* This is a basic stack implementation, with registers holding the top two
+ * element of the stack, allowing asynchronous-read for its top two elements. */
 
 /**
  * Op code for the stack. Each operation takes one clock cycle to conduct.
@@ -23,16 +23,16 @@ class StackPort[T <: Data](depth: Int, t: T) extends Bundle {
   val din    = Input(t)
   val top    = Output(t)
   val snd    = Output(t)
-  val elms   = Output(UInt(log2Ceil(depth).W))
+  val elms   = Output(UInt(log2Ceil(depth + 1).W))
 }
 
 class RegStack[T <: Data](depth: Int, t: T) extends Module {
   val io         = IO(new StackPort(depth, t))
-  val stkPtr     = RegInit(0.U(log2Ceil(depth - 1).W))
-  val stkMem     = Module(new BlockMem(depth - 1, t))
+  val stkPtr     = RegInit(0.U(log2Ceil(depth).W))
+  val stkMem     = Module(new BlockMem(depth, t))
   val topElm     = RegInit(0.U.asTypeOf(t))
   val sndElm     = RegInit(0.U.asTypeOf(t))
-  val elmCount   = RegInit(0.U(log2Ceil(depth).W))
+  val elmCount   = RegInit(0.U(log2Ceil(depth + 1).W))
   val lastPushed = RegInit(0.U.asTypeOf(t)) // handle pop-after-push
   val justPushed = RegInit(false.B)
 

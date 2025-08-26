@@ -11,6 +11,15 @@ help:
 	@echo "  make run gcd.GCD           - Runs: sbt --mem 8000 'runMain gcd.GCD'"
 
 # Test target that takes the test class as an argument
+test-vcd:
+	@if [ "$(filter-out test-vcd,$(MAKECMDGOALS))" = "" ]; then \
+		echo "Error: Please specify a test class name"; \
+		echo "Usage: make test-vcd <TestClassName>"; \
+		echo "Example: make test-vcd gcd.GCDSpec"; \
+		exit 1; \
+	fi
+	sbt --mem 8000 'testOnly $(filter-out test-vcd,$(MAKECMDGOALS)) -- -DemitVcd=1'
+	
 test:
 	@if [ "$(filter-out test,$(MAKECMDGOALS))" = "" ]; then \
 		echo "Error: Please specify a test class name"; \
@@ -18,7 +27,7 @@ test:
 		echo "Example: make test gcd.GCDSpec"; \
 		exit 1; \
 	fi
-	sbt --mem 8000 'testOnly $(filter-out test,$(MAKECMDGOALS)) -- -DemitVcd=1'
+	sbt --mem 8000 'testOnly $(filter-out test,$(MAKECMDGOALS))'
 
 # Run target that takes the main class as an argument
 run:
