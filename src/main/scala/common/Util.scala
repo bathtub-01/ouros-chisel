@@ -86,19 +86,23 @@ object Helper {
         .asUInt
     )
 
-  def prmBuilder(op: String): Atom = {
-    val (opCode, isSub, isCondInv) = op match {
-      case "+"  => (AluOpCode.add_sub, false.B, false.B)
-      case "-"  => (AluOpCode.add_sub, true.B, false.B)
-      case "*"  => (AluOpCode.mult, false.B, false.B)
-      case "==" => (AluOpCode.eq, true.B, false.B)
-      case "/=" => (AluOpCode.eq, true.B, true.B)
-      case "<"  => (AluOpCode.lt, true.B, false.B)
-      case "<=" => (AluOpCode.le, true.B, false.B)
-      case ">"  => (AluOpCode.le, true.B, true.B)
-      case ">=" => (AluOpCode.lt, true.B, true.B)
+  def strToOp(op: String): (AluOpCode.Type, Boolean, Boolean) = {
+    op match {
+      case "+"  => (AluOpCode.add_sub, false, false)
+      case "-"  => (AluOpCode.add_sub, true, false)
+      case "*"  => (AluOpCode.mult, false, false)
+      case "==" => (AluOpCode.eq, true, false)
+      case "/=" => (AluOpCode.eq, true, true)
+      case "<"  => (AluOpCode.lt, true, false)
+      case "<=" => (AluOpCode.le, true, false)
+      case ">"  => (AluOpCode.le, true, true)
+      case ">=" => (AluOpCode.lt, true, true)
       case _    => throw new IllegalArgumentException(s"Unknown operation: $op")
     }
+  }
+
+  def prmBuilder(op: String): Atom = {
+    val (opCode, isSub, isCondInv) = strToOp(op)
 
     (new Atom).Lit(
       _.atomType -> AtomType.PRM,
@@ -106,8 +110,8 @@ object Helper {
         .Lit(
           _.fun -> (new AluFunction).Lit(
             _.opcode      -> opCode,
-            _.is_sub      -> isSub,
-            _.is_cond_inv -> isCondInv
+            _.is_sub      -> isSub.B,
+            _.is_cond_inv -> isCondInv.B
           )
         )
         .asUInt
@@ -126,6 +130,9 @@ object Helper {
     )
 
   def emptyApp: Application = appBuilder()
+
+  def boolean2Comb(b: Boolean): Atom = if (b) Combinators.A else Combinators.K
+
 }
 
 /**
