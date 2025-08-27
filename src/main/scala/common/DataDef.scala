@@ -50,18 +50,41 @@ class IntPayload extends AtomPayload {
   val value = SInt(atomPayloadSize.W)
 }
 
+object AluOpCode extends ChiselEnum {
+  val eq      = Value
+  val le      = Value
+  val lt      = Value
+  val add_sub = Value
+  val mult    = Value
+}
+
+/**
+ *   - is_sub: specify add/sub for adder. Must assert for both substraction and
+ *     comparison.
+ *   - is_cond_inv: inverse the result of conditional test (eq -> neq, le -> gt,
+ *     lt -> ge). Must be cleared for non-comparison instr
+ */
+class AluFunction extends Bundle {
+  val opcode      = AluOpCode()
+  val is_sub      = Bool()
+  val is_cond_inv = Bool()
+}
+
 /**
  * Payload for PRM, contains the control information to ALU
  */
-// class PrmPayload extends AtomPayload {
-//   import mutator.ALUFunction
-//   val fun  = new ALUFunction
-//   val swap = Bool()
-// }
+class PrmPayload extends AtomPayload {
+  val fun = new AluFunction
+}
 
 class Atom extends Bundle {
   val atomType = AtomType()
   val payload  = Bits(atomPayloadSize.W)
+
+  def toPrm(): PrmPayload = this.payload.asTypeOf(new PrmPayload)
+  def toInt(): IntPayload = this.payload.asTypeOf(new IntPayload)
+  def toCom(): ComPayload = this.payload.asTypeOf(new ComPayload)
+  def toPtr(): PtrPayload = this.payload.asTypeOf(new PtrPayload)
 }
 
 class Application extends Bundle {
