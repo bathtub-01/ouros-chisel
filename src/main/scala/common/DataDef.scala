@@ -87,10 +87,6 @@ class Atom extends Bundle {
   def toPtr(): PtrPayload = this.payload.asTypeOf(new PtrPayload)
 }
 
-class Application extends Bundle {
-  val app = Vec(maxAppLen, new Atom)
-}
-
 class ActiveApp extends Bundle {
   val stack_idx = UInt(log2Ceil(maxThreads).W)
   val app       = Vec(maxAppLen, new Atom)

@@ -52,11 +52,11 @@ class AluCore(width: Int) extends Module {
  */
 class Alu(pipelined: Boolean) extends Module {
   val io = IO(new Bundle {
-    val in  = Flipped(Decoupled(new Application))
-    val out = Decoupled(new Application)
+    val in  = Flipped(Decoupled(new ActiveApp))
+    val out = Decoupled(new ActiveApp)
   })
   val aluCore = Module(new AluCore(atomPayloadSize))
-  val outReg  = RegInit(0.U.asTypeOf(new BitsWithValid(new Application)))
+  val outReg  = RegInit(0.U.asTypeOf(new BitsWithValid(new ActiveApp)))
 
   aluCore.io.fn  := io.in.bits.app(0).toPrm().fun
   aluCore.io.in1 := io.in.bits.app(1).payload
@@ -78,8 +78,9 @@ class Alu(pipelined: Boolean) extends Module {
   val resSeq: Seq[Atom] = aluOut +: io.in.bits.app.drop(3)
 
   when(io.in.fire) {
-    outReg.valid := true.B
-    outReg.bits  := extendToApp(resSeq)
+    outReg.valid          := true.B
+    outReg.bits.stack_idx := io.in.bits.stack_idx
+    outReg.bits.app       := extendToApp(resSeq)
   }
 
   if (pipelined) {
@@ -87,9 +88,10 @@ class Alu(pipelined: Boolean) extends Module {
     io.out.valid := outReg.valid
     io.out.bits  := outReg.bits
   } else {
-    io.in.ready  := io.out.ready
-    io.out.valid := io.in.valid
-    io.out.bits  := extendToApp(resSeq)
+    io.in.ready           := io.out.ready
+    io.out.valid          := io.in.valid
+    io.out.bits.stack_idx := io.in.bits.stack_idx
+    io.out.bits.app       := extendToApp(resSeq)
   }
 }
 

@@ -4,10 +4,13 @@ import chisel3._
 import chisel3.simulator.EphemeralSimulator._
 import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.freespec.AnyFreeSpec
+import chisel3.experimental.BundleLiterals._
 
 import scala.util.Random
 import common._
 import common.Helper._
+import common.SystemConfig.maxThreads
+import common.SystemConfig.maxAppLen
 
 class AluSimulator {
   def step(op: String, in1: Int, in2: Int): Atom = op match {
@@ -30,14 +33,28 @@ class AluSimulator {
 class AluSpec extends AnyFreeSpec with ChiselSim {
   val simulator = new AluSimulator
 
-  def getStimu(): (Application, Application) = {
-    val op     = simulator.opGen()
-    val in1    = Random.nextInt(1024)
-    val in2    = Random.nextInt(1024)
-    val res    = simulator.step(op, in1, in2)
-    val app_in =
-      appBuilder(prmBuilder(op), intBuilder(in1), intBuilder(in2))
-    val app_out = appBuilder(res)
+  def getStimu(): (ActiveApp, ActiveApp) = {
+    val op       = simulator.opGen()
+    val in1      = Random.nextInt(1024)
+    val in2      = Random.nextInt(1024)
+    val res      = simulator.step(op, in1, in2)
+    val stack_id = Random.nextInt(maxThreads)
+    val app_in   = (new ActiveApp).Lit(
+      _.stack_idx -> stack_id.U,
+      _.app       -> appBuilder(
+        maxAppLen,
+        prmBuilder(op),
+        intBuilder(in1),
+        intBuilder(in2)
+      )
+    )
+    val app_out = (new ActiveApp).Lit(
+      _.stack_idx -> stack_id.U,
+      _.app       -> appBuilder(
+        maxAppLen,
+        res
+      )
+    )
     (app_in, app_out)
   }
 

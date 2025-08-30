@@ -16,14 +16,14 @@ class BitsWithValid[T <: Data](t: T) extends Bundle {
 object Helper {
 
   /**
-   * Takes a sequence of Atoms, convert it into a fixed-sized Application.
+   * Takes a sequence of Atoms, convert it into a full-sized Application.
    *
    * For shorter sequences, extend the length with NOPs
    */
-  def extendToApp(atms: Seq[Atom]): Application = {
+  def extendToApp(atms: Seq[Atom]): Vec[Atom] = {
     require(atms.length <= maxAppLen)
-    val res = WireInit(0.U.asTypeOf(new Application))
-    res.app.zip(atms).foreach { case (to, from) =>
+    val res = WireInit(0.U.asTypeOf(Vec(maxAppLen, new Atom)))
+    res.zip(atms).foreach { case (to, from) =>
       to := from
     }
     res
@@ -211,15 +211,8 @@ object Helper {
       _.payload  -> 0.U
     )
 
-  def appBuilder(atoms: Atom*): Application =
-    (new Application).Lit(
-      _.app -> Vec.Lit(padWith(atoms.toList, maxAppLen, nopBuilder): _*)
-    )
-
   def appBuilder(length: Int, atoms: Atom*): Vec[Atom] =
     Vec.Lit(padWith(atoms.toSeq, length, nopBuilder): _*)
-
-  def emptyApp: Application = appBuilder()
 
   def boolean2Comb(b: Boolean): Atom = if (b) Combinators.A else Combinators.K
 
