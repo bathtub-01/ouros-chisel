@@ -77,14 +77,17 @@ class Alu(pipelined: Boolean) extends Module {
 
   val resSeq: Seq[Atom] = aluOut +: io.in.bits.app.drop(3)
 
-  outReg.valid := io.in.valid
-  outReg.bits  := extendToApp(resSeq)
-  io.in.ready  := io.out.fire
+  when(io.in.fire) {
+    outReg.valid := true.B
+    outReg.bits  := extendToApp(resSeq)
+  }
 
   if (pipelined) {
+    io.in.ready  := !outReg.valid || io.out.ready
     io.out.valid := outReg.valid
     io.out.bits  := outReg.bits
   } else {
+    io.in.ready  := io.out.ready
     io.out.valid := io.in.valid
     io.out.bits  := extendToApp(resSeq)
   }
@@ -92,7 +95,7 @@ class Alu(pipelined: Boolean) extends Module {
 
 object Alu extends App {
   ChiselStage.emitSystemVerilogFile(
-    new Alu(false),
+    new Alu(true),
     Array("--target-dir", "sv-gen"),
     firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info")
   )

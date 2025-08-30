@@ -26,7 +26,11 @@ object SystemConfig {
   val comIdxs = 6
 
   /**
-   * maximum length of an application
+   * maximum length of an application, require:
+   *
+   * maxApplen >= comArity + 1
+   *
+   * maxApplen >= comIdxs
    */
   val maxAppLen = 8
 
@@ -34,6 +38,11 @@ object SystemConfig {
    * cells in the heap
    */
   val heapSize = 512 * 1024
+
+  /**
+   * thread resource in a core
+   */
+  val maxThreads = 8
 
   val atomPayloadSize = atomSize - AtomType.getWidth
 }

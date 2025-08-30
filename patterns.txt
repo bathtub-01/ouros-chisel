@@ -1,0 +1,64 @@
+X,ParseRes { spine: [Arg(0)], app1: [], app2: [], app3: [] }
+XX,ParseRes { spine: [Arg(0), Arg(1)], app1: [], app2: [], app3: [] }
+XXX,ParseRes { spine: [Arg(0), Arg(1), Arg(2)], app1: [], app2: [], app3: [] }
+X(XX),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Arg(2)], app2: [], app3: [] }
+XXXX,ParseRes { spine: [Arg(0), Arg(1), Arg(2), Arg(3)], app1: [], app2: [], app3: [] }
+X(XX)X,ParseRes { spine: [Arg(0), Ptr(0), Arg(3)], app1: [Arg(1), Arg(2)], app2: [], app3: [] }
+XX(XX),ParseRes { spine: [Arg(0), Arg(1), Ptr(0)], app1: [Arg(2), Arg(3)], app2: [], app3: [] }
+X(XXX),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Arg(2), Arg(3)], app2: [], app3: [] }
+X(X(XX)),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Ptr(1)], app2: [Arg(2), Arg(3)], app3: [] }
+XXXXX,ParseRes { spine: [Arg(0), Arg(1), Arg(2), Arg(3), Arg(4)], app1: [], app2: [], app3: [] }
+X(XX)XX,ParseRes { spine: [Arg(0), Ptr(0), Arg(3), Arg(4)], app1: [Arg(1), Arg(2)], app2: [], app3: [] }
+XX(XX)X,ParseRes { spine: [Arg(0), Arg(1), Ptr(0), Arg(4)], app1: [Arg(2), Arg(3)], app2: [], app3: [] }
+X(XXX)X,ParseRes { spine: [Arg(0), Ptr(0), Arg(4)], app1: [Arg(1), Arg(2), Arg(3)], app2: [], app3: [] }
+X(X(XX))X,ParseRes { spine: [Arg(0), Ptr(0), Arg(4)], app1: [Arg(1), Ptr(1)], app2: [Arg(2), Arg(3)], app3: [] }
+XXX(XX),ParseRes { spine: [Arg(0), Arg(1), Arg(2), Ptr(0)], app1: [Arg(3), Arg(4)], app2: [], app3: [] }
+X(XX)(XX),ParseRes { spine: [Arg(0), Ptr(0), Ptr(1)], app1: [Arg(1), Arg(2)], app2: [Arg(3), Arg(4)], app3: [] }
+XX(XXX),ParseRes { spine: [Arg(0), Arg(1), Ptr(0)], app1: [Arg(2), Arg(3), Arg(4)], app2: [], app3: [] }
+XX(X(XX)),ParseRes { spine: [Arg(0), Arg(1), Ptr(0)], app1: [Arg(2), Ptr(1)], app2: [Arg(3), Arg(4)], app3: [] }
+X(XXXX),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Arg(2), Arg(3), Arg(4)], app2: [], app3: [] }
+X(X(XX)X),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Ptr(1), Arg(4)], app2: [Arg(2), Arg(3)], app3: [] }
+X(XX(XX)),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Arg(2), Ptr(1)], app2: [Arg(3), Arg(4)], app3: [] }
+X(X(XXX)),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Ptr(1)], app2: [Arg(2), Arg(3), Arg(4)], app3: [] }
+X(X(X(XX))),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Ptr(1)], app2: [Arg(2), Ptr(2)], app3: [Arg(3), Arg(4)] }
+XXXXXX,ParseRes { spine: [Arg(0), Arg(1), Arg(2), Arg(3), Arg(4), Arg(5)], app1: [], app2: [], app3: [] }
+X(XX)XXX,ParseRes { spine: [Arg(0), Ptr(0), Arg(3), Arg(4), Arg(5)], app1: [Arg(1), Arg(2)], app2: [], app3: [] }
+XX(XX)XX,ParseRes { spine: [Arg(0), Arg(1), Ptr(0), Arg(4), Arg(5)], app1: [Arg(2), Arg(3)], app2: [], app3: [] }
+X(XXX)XX,ParseRes { spine: [Arg(0), Ptr(0), Arg(4), Arg(5)], app1: [Arg(1), Arg(2), Arg(3)], app2: [], app3: [] }
+X(X(XX))XX,ParseRes { spine: [Arg(0), Ptr(0), Arg(4), Arg(5)], app1: [Arg(1), Ptr(1)], app2: [Arg(2), Arg(3)], app3: [] }
+XXX(XX)X,ParseRes { spine: [Arg(0), Arg(1), Arg(2), Ptr(0), Arg(5)], app1: [Arg(3), Arg(4)], app2: [], app3: [] }
+X(XX)(XX)X,ParseRes { spine: [Arg(0), Ptr(0), Ptr(1), Arg(5)], app1: [Arg(1), Arg(2)], app2: [Arg(3), Arg(4)], app3: [] }
+XX(XXX)X,ParseRes { spine: [Arg(0), Arg(1), Ptr(0), Arg(5)], app1: [Arg(2), Arg(3), Arg(4)], app2: [], app3: [] }
+XX(X(XX))X,ParseRes { spine: [Arg(0), Arg(1), Ptr(0), Arg(5)], app1: [Arg(2), Ptr(1)], app2: [Arg(3), Arg(4)], app3: [] }
+X(XXXX)X,ParseRes { spine: [Arg(0), Ptr(0), Arg(5)], app1: [Arg(1), Arg(2), Arg(3), Arg(4)], app2: [], app3: [] }
+X(X(XX)X)X,ParseRes { spine: [Arg(0), Ptr(0), Arg(5)], app1: [Arg(1), Ptr(1), Arg(4)], app2: [Arg(2), Arg(3)], app3: [] }
+X(XX(XX))X,ParseRes { spine: [Arg(0), Ptr(0), Arg(5)], app1: [Arg(1), Arg(2), Ptr(1)], app2: [Arg(3), Arg(4)], app3: [] }
+X(X(XXX))X,ParseRes { spine: [Arg(0), Ptr(0), Arg(5)], app1: [Arg(1), Ptr(1)], app2: [Arg(2), Arg(3), Arg(4)], app3: [] }
+X(X(X(XX)))X,ParseRes { spine: [Arg(0), Ptr(0), Arg(5)], app1: [Arg(1), Ptr(1)], app2: [Arg(2), Ptr(2)], app3: [Arg(3), Arg(4)] }
+XXXX(XX),ParseRes { spine: [Arg(0), Arg(1), Arg(2), Arg(3), Ptr(0)], app1: [Arg(4), Arg(5)], app2: [], app3: [] }
+X(XX)X(XX),ParseRes { spine: [Arg(0), Ptr(0), Arg(3), Ptr(1)], app1: [Arg(1), Arg(2)], app2: [Arg(4), Arg(5)], app3: [] }
+XX(XX)(XX),ParseRes { spine: [Arg(0), Arg(1), Ptr(0), Ptr(1)], app1: [Arg(2), Arg(3)], app2: [Arg(4), Arg(5)], app3: [] }
+X(XXX)(XX),ParseRes { spine: [Arg(0), Ptr(0), Ptr(1)], app1: [Arg(1), Arg(2), Arg(3)], app2: [Arg(4), Arg(5)], app3: [] }
+X(X(XX))(XX),ParseRes { spine: [Arg(0), Ptr(0), Ptr(2)], app1: [Arg(1), Ptr(1)], app2: [Arg(2), Arg(3)], app3: [Arg(4), Arg(5)] }
+XXX(XXX),ParseRes { spine: [Arg(0), Arg(1), Arg(2), Ptr(0)], app1: [Arg(3), Arg(4), Arg(5)], app2: [], app3: [] }
+XXX(X(XX)),ParseRes { spine: [Arg(0), Arg(1), Arg(2), Ptr(0)], app1: [Arg(3), Ptr(1)], app2: [Arg(4), Arg(5)], app3: [] }
+X(XX)(XXX),ParseRes { spine: [Arg(0), Ptr(0), Ptr(1)], app1: [Arg(1), Arg(2)], app2: [Arg(3), Arg(4), Arg(5)], app3: [] }
+X(XX)(X(XX)),ParseRes { spine: [Arg(0), Ptr(0), Ptr(1)], app1: [Arg(1), Arg(2)], app2: [Arg(3), Ptr(2)], app3: [Arg(4), Arg(5)] }
+XX(XXXX),ParseRes { spine: [Arg(0), Arg(1), Ptr(0)], app1: [Arg(2), Arg(3), Arg(4), Arg(5)], app2: [], app3: [] }
+XX(X(XX)X),ParseRes { spine: [Arg(0), Arg(1), Ptr(0)], app1: [Arg(2), Ptr(1), Arg(5)], app2: [Arg(3), Arg(4)], app3: [] }
+XX(XX(XX)),ParseRes { spine: [Arg(0), Arg(1), Ptr(0)], app1: [Arg(2), Arg(3), Ptr(1)], app2: [Arg(4), Arg(5)], app3: [] }
+XX(X(XXX)),ParseRes { spine: [Arg(0), Arg(1), Ptr(0)], app1: [Arg(2), Ptr(1)], app2: [Arg(3), Arg(4), Arg(5)], app3: [] }
+XX(X(X(XX))),ParseRes { spine: [Arg(0), Arg(1), Ptr(0)], app1: [Arg(2), Ptr(1)], app2: [Arg(3), Ptr(2)], app3: [Arg(4), Arg(5)] }
+X(XXXXX),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Arg(2), Arg(3), Arg(4), Arg(5)], app2: [], app3: [] }
+X(X(XX)XX),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Ptr(1), Arg(4), Arg(5)], app2: [Arg(2), Arg(3)], app3: [] }
+X(XX(XX)X),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Arg(2), Ptr(1), Arg(5)], app2: [Arg(3), Arg(4)], app3: [] }
+X(X(XXX)X),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Ptr(1), Arg(5)], app2: [Arg(2), Arg(3), Arg(4)], app3: [] }
+X(X(X(XX))X),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Ptr(1), Arg(5)], app2: [Arg(2), Ptr(2)], app3: [Arg(3), Arg(4)] }
+X(XXX(XX)),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Arg(2), Arg(3), Ptr(1)], app2: [Arg(4), Arg(5)], app3: [] }
+X(X(XX)(XX)),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Ptr(1), Ptr(2)], app2: [Arg(2), Arg(3)], app3: [Arg(4), Arg(5)] }
+X(XX(XXX)),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Arg(2), Ptr(1)], app2: [Arg(3), Arg(4), Arg(5)], app3: [] }
+X(XX(X(XX))),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Arg(2), Ptr(1)], app2: [Arg(3), Ptr(2)], app3: [Arg(4), Arg(5)] }
+X(X(XXXX)),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Ptr(1)], app2: [Arg(2), Arg(3), Arg(4), Arg(5)], app3: [] }
+X(X(X(XX)X)),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Ptr(1)], app2: [Arg(2), Ptr(2), Arg(5)], app3: [Arg(3), Arg(4)] }
+X(X(XX(XX))),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Ptr(1)], app2: [Arg(2), Arg(3), Ptr(2)], app3: [Arg(4), Arg(5)] }
+X(X(X(XXX))),ParseRes { spine: [Arg(0), Ptr(0)], app1: [Arg(1), Ptr(1)], app2: [Arg(2), Ptr(2)], app3: [Arg(3), Arg(4), Arg(5)] }

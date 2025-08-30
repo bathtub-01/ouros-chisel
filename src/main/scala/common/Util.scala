@@ -29,25 +29,86 @@ object Helper {
     res
   }
 
-  def padWith[T](l: List[T], expectedLen: Int, default: T): List[T] = {
+  /**
+   * Take a prefix from `source`, link its elements to `sink`, starting from
+   * `start` position of `sink`.
+   * @example
+   *   takeUInt(Vec(a,b,c), 2, sink, 1) will cause sink(1) := a; sink(2) := b
+   * @note
+   *   Hardware cost involves here. Avoid using this when `take` and `start` can
+   *   be determined at compile time.
+   */
+  def takeUInt[T <: Data](
+      source: IndexedSeq[T],
+      take: UInt,
+      sink: Vec[T],
+      start: UInt
+  ): Unit = {
+    for (i <- 0 until source.length) {
+      when(i.U < take && start + i.U < sink.length.U) {
+        sink(start + i.U) := source(i)
+      }
+    }
+  }
+
+  /**
+   * Take a sufix from `source`, link its elements to `sink`, starting from
+   * `start` position of `sink`.
+   * @example
+   *   dropUInt(Vec(a,b,c), 1, sink, 1) will cause sink(1) := b; sink(2) := c
+   * @note
+   *   Hardware cost involves here. Avoid using this when `drop` and `start` can
+   *   be determined at compile time.
+   */
+  def dropUInt[T <: Data](
+      source: Vec[T],
+      drop: UInt,
+      sink: Vec[T],
+      start: UInt
+  ): Unit = {
+    for (i <- 0 until source.length) {
+      when(start +& i.U < sink.length.U && i.U +& drop < source.length.U) {
+        sink(start +& i.U) := source(drop +& i.U)
+      }
+    }
+  }
+
+  /**
+   * Takes a sequence, pad it with default elements, make it into expected
+   * length.
+   */
+  def padWith[T](
+      l: Seq[T],
+      expectedLen: Int,
+      default: T
+  ): Seq[T] = {
     if (l.length == expectedLen)
       l
     else
-      l ++ List.fill(expectedLen - l.length)(default)
+      l ++ Seq.fill(expectedLen - l.length)(default)
   }
 
+  /**
+   * Literal NOP builder
+   */
   def nopBuilder: Atom =
     (new Atom).Lit(
       _.atomType -> AtomType.NOP,
       _.payload  -> 0.U
     )
 
+  /**
+   * Literal ERR builder
+   */
   def errorBuilder(code: Int): Atom =
     (new Atom).Lit(
       _.atomType -> AtomType.ERR,
       _.payload  -> code.U
     )
 
+  /**
+   * Literal PTR builder
+   */
   def ptrBuilder(unique: Boolean, pointer: Int): Atom =
     (new Atom).Lit(
       _.atomType -> AtomType.PTR,
@@ -56,8 +117,25 @@ object Helper {
           _.unique  -> unique.B,
           _.pointer -> pointer.U
         )
+        .asUInt
     )
 
+  /**
+   * Dynamic PTR maker
+   */
+  def makePtr(unique: Bool, pointer: UInt): Atom = {
+    val payload = Wire(new PtrPayload)
+    payload.unique  := unique
+    payload.pointer := pointer
+    val res = Wire(new Atom)
+    res.atomType := AtomType.PTR
+    res.payload  := payload.asUInt
+    res
+  }
+
+  /**
+   * Literal COM builder
+   */
   def comBuilder(arity: Int, pattern: Int, idxs: List[Int]): Atom =
     (new Atom).Lit(
       _.atomType -> AtomType.COM,
@@ -76,6 +154,9 @@ object Helper {
         .asUInt
     )
 
+  /**
+   * Literal INT builder
+   */
   def intBuilder(value: Int): Atom =
     (new Atom).Lit(
       _.atomType -> AtomType.INT,
@@ -101,6 +182,9 @@ object Helper {
     }
   }
 
+  /**
+   * Literal PRM builder
+   */
   def prmBuilder(op: String): Atom = {
     val (opCode, isSub, isCondInv) = strToOp(op)
 
@@ -118,6 +202,9 @@ object Helper {
     )
   }
 
+  /**
+   * Literal Y builder
+   */
   def yBuilder(): Atom =
     (new Atom).Lit(
       _.atomType -> AtomType.Y,
@@ -128,6 +215,9 @@ object Helper {
     (new Application).Lit(
       _.app -> Vec.Lit(padWith(atoms.toList, maxAppLen, nopBuilder): _*)
     )
+
+  def appBuilder(length: Int, atoms: Atom*): Vec[Atom] =
+    Vec.Lit(padWith(atoms.toSeq, length, nopBuilder): _*)
 
   def emptyApp: Application = appBuilder()
 

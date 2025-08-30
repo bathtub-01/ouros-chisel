@@ -90,3 +90,13 @@ class Atom extends Bundle {
 class Application extends Bundle {
   val app = Vec(maxAppLen, new Atom)
 }
+
+class ActiveApp extends Bundle {
+  val stack_idx = UInt(log2Ceil(maxThreads).W)
+  val app       = Vec(maxAppLen, new Atom)
+}
+
+class FrozenApp(appLen: Int) extends Bundle {
+  val heap_addr = UInt(log2Ceil(heapSize).W)
+  val app       = Vec(appLen, new Atom)
+}
