@@ -1,7 +1,6 @@
 package ouros
 
 import chisel3._
-import chisel3.simulator.EphemeralSimulator._
 import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.freespec.AnyFreeSpec
 import chisel3.experimental.BundleLiterals._
