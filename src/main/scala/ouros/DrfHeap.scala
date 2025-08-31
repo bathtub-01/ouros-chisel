@@ -89,23 +89,37 @@ object WORKs extends ChiselEnum {
 /**
  * Dereference heap block
  */
-class DrfHeap extends Module {
-  val io = IO(new Bundle {
-    val in_main       = Flipped(Decoupled(new ActiveApp))
-    val in_sub        = Flipped(Decoupled(new FrozenApp(comIdxs - 1)))
-    val out_main      = Decoupled(new ActiveApp)
-    val out_sub       = Decoupled(new ActiveApp)
-    val free_addr     = Output(UInt(log2Ceil(heapSize).W))
-    val addr_consumed = Input(UInt(2.W))
-  })
+// class DrfHeap extends Module {
+//   val io = IO(new Bundle {
+//     val in_main       = Flipped(Decoupled(new ActiveApp))
+//     val in_sub        = Flipped(Decoupled(new FrozenApp(comIdxs - 1)))
+//     val out_main      = Decoupled(new ActiveApp)
+//     val out_sub       = Decoupled(new ActiveApp)
+//     val free_addr     = Output(UInt(log2Ceil(heapSize).W))
+//     val addr_consumed = Input(UInt(2.W))
+//   })
 
-  val stmMain = RegInit(Stm.IDLE)
-  val stmSub  = RegInit(StmSub.IDLE)
+//   val stmMain = RegInit(Stm.IDLE)
+//   val stmSub  = RegInit(StmSub.IDLE)
 
-  val consumes = Wire(CONSUMEs())
-  val whnfs    = Wire(WHNFs())
-  val ias1     = Wire(IAs1())
-  val ias2     = Wire(IAs2())
-  val resumes  = Wire(RESUMEs())
-  val works    = Wire(WORKs())
-}
+//   // generate the CONSUMEs signal under current state
+//   def genCONSUMEs: CONSUMEs.Type = {
+//     val wire = Wire(CONSUMEs())
+//     when(!io.in_main.fire) {
+//       wire := CONSUMEs.NoInput
+//     }.otherwise {}
+//     wire
+//   }
+
+//   switch(stmMain) {
+//     is(Stm.IDLE) {}
+//     is(Stm.WHNF) {}
+//     is(Stm.IA) {}
+//     is(Stm.RESUME) {}
+//   }
+
+//   switch(stmSub) {
+//     is(StmSub.IDLE) {}
+//     is(StmSub.WORK) {}
+//   }
+// }

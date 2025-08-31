@@ -16,6 +16,59 @@ class BitsWithValid[T <: Data](t: T) extends Bundle {
 object Helper {
 
   /**
+   * Similar to `Vec.indexWhere`, but returns the length of the Vec when the
+   * predicate fails for all elements (For `Vec.indexWhere`, it returns the idx
+   * of the last element when all failed).
+   */
+  def firstWhere[T <: Data](v: Vec[T])(p: T => Bool): UInt = {
+    val res = Wire(UInt(log2Ceil(v.length + 1).W))
+    res := v.length.U
+    for (i <- v.length - 1 to 0 by -1) {
+      when(p(v(i.U))) {
+        res := i.U
+      }
+    }
+    res
+  }
+
+  /**
+   * Returns the **actual** length of an Application.
+   * @example
+   *   appLen([+, 1, 2, NOP]) = 3
+   */
+  def appLen(app: Vec[Atom]): UInt =
+    Helper.firstWhere(app) { _.asUInt === 0.U }
+
+  /**
+   * The arity of an Atom.
+   */
+  def arityOf(atm: Atom): UInt = {
+    val res = Wire(UInt())
+    res := 0.U // wild-card case
+    switch(atm.atomType) {
+      is(AtomType.COM) {
+        res := atm.toCom().arity
+      }
+      is(AtomType.PRM) {
+        res := 2.U
+      }
+      is(AtomType.INT) {
+        res := 1.U
+      }
+      is(AtomType.Y) {
+        res := 1.U
+      }
+    }
+    res
+  }
+
+  /**
+   * Determine whether an Application is in Weak-Head-Normal-Form.
+   */
+  def isWHNF(app: Vec[Atom]): Bool =
+    Helper.arityOf(app(0)) >= Helper.appLen(app)
+
+  /**
    * Takes a sequence of Atoms, convert it into a full-sized Application.
    *
    * For shorter sequences, extend the length with NOPs

@@ -104,7 +104,8 @@ class Reducer(pipelined: Boolean) extends Module {
       resApp2.app := app2Table(comb.pattern).map(trans(_))
       resApp3.app := app3Table(comb.pattern).map(trans(_))
       // handle over-applied spine
-      val redSpineLen = spineTable(comb.pattern).indexWhere(!_.valid)
+      val redSpineLen =
+        firstWhere(spineTable(comb.pattern)) { !_.valid }
       dropUInt(io.in.bits.app, comb.arity + 1.U, resSpine.app, redSpineLen)
     }
     is(AtomType.Y) {

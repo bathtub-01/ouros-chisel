@@ -8,8 +8,7 @@ import chisel3.experimental.BundleLiterals._
 import scala.util.Random
 import common._
 import common.Helper._
-import common.SystemConfig.maxThreads
-import common.SystemConfig.maxAppLen
+import common.SystemConfig._
 
 class AluSimulator {
   def step(op: String, in1: Int, in2: Int): Atom = op match {
