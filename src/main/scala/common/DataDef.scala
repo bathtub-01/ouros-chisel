@@ -86,6 +86,11 @@ class Atom extends Bundle {
   def toInt(): IntPayload = this.payload.asTypeOf(new IntPayload)
   def toCom(): ComPayload = this.payload.asTypeOf(new ComPayload)
   def toPtr(): PtrPayload = this.payload.asTypeOf(new PtrPayload)
+
+  def isPtr(): Bool = this.atomType === AtomType.PTR
+  def isCom(): Bool = this.atomType === AtomType.COM
+  def isInt(): Bool = this.atomType === AtomType.INT
+  def isPrm(): Bool = this.atomType === AtomType.PRM
 }
 
 class ActiveApp extends Bundle {

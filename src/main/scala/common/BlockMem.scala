@@ -3,9 +3,8 @@ package common
 import chisel3._
 import chisel3.util._
 
-/*  Implement basic memory as an independant module. This helps
-    Vivado to infer memory as BRAM instead of LUT RAM.
- */
+/* Implement basic memory as an independant module. This helps Vivado to infer
+ * memory as BRAM instead of LUT RAM. */
 
 class MemIOBundle[T <: Data](depth: Int, t: T) extends Bundle {
   val rdAddr = Input(UInt(log2Ceil(depth).W))
@@ -51,9 +50,8 @@ class RomIO[T <: Data](depth: Int, t: T) extends Bundle {
   val rdData = Output(t)
 }
 
-/*  We use ROM (Vec) for program memory, this module has the same read/write
-    timing as BlockMem.
- */
+/* We use ROM (Vec) for program memory, this module has the same read/write
+ * timing as BlockMem. */
 class BlockMemRom[T <: Data](depth: Int, t: T)(bin: Seq[T]) extends Module {
   val io = IO(new RomIO(depth, t))
 
@@ -65,4 +63,39 @@ class BlockMemRom[T <: Data](depth: Int, t: T)(bin: Seq[T]) extends Module {
 class MultiPortBlockMem[T <: Data](n: Int, depth: Int, t: T) extends Module {
   val io = IO(new SRAMInterface(depth, t, 0, 0, n))
   io :<>= SRAM(depth, t, 0, 0, n)
+}
+
+class DualPortBlockMem[T <: Data](depth: Int, t: T) extends Module {
+  val io = IO(new SRAMInterface(depth, t, 0, 0, 2))
+  io :<>= SRAM(depth, t, 0, 0, 2)
+
+  def readA(addr: UInt) = {
+    io.readwritePorts(0).enable  := true.B
+    io.readwritePorts(0).isWrite := false.B
+    io.readwritePorts(0).address := addr
+  }
+
+  def readOutA = io.readwritePorts(0).readData
+
+  def writeA(data: T, addr: UInt) = {
+    io.readwritePorts(0).enable    := true.B
+    io.readwritePorts(0).isWrite   := true.B
+    io.readwritePorts(0).writeData := data
+    io.readwritePorts(0).address   := addr
+  }
+
+  def readB(addr: UInt) = {
+    io.readwritePorts(1).enable  := true.B
+    io.readwritePorts(1).isWrite := false.B
+    io.readwritePorts(1).address := addr
+  }
+
+  def readOutB = io.readwritePorts(1).readData
+
+  def writeB(data: T, addr: UInt) = {
+    io.readwritePorts(1).enable    := true.B
+    io.readwritePorts(1).isWrite   := true.B
+    io.readwritePorts(1).writeData := data
+    io.readwritePorts(1).address   := addr
+  }
 }
