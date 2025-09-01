@@ -86,40 +86,71 @@ object WORKs extends ChiselEnum {
   val DmderNotFound = Value
 }
 
+class HeapCell extends Bundle {
+  val exist = Bool()
+  val app   = Vec(maxAppLen, new Atom)
+}
+
 /**
  * Dereference heap block
  */
-// class DrfHeap extends Module {
-//   val io = IO(new Bundle {
-//     val in_main       = Flipped(Decoupled(new ActiveApp))
-//     val in_sub        = Flipped(Decoupled(new FrozenApp(comIdxs - 1)))
-//     val out_main      = Decoupled(new ActiveApp)
-//     val out_sub       = Decoupled(new ActiveApp)
-//     val free_addr     = Output(UInt(log2Ceil(heapSize).W))
-//     val addr_consumed = Input(UInt(2.W))
-//   })
+class DrfHeap extends Module {
+  val io = IO(new Bundle {
+    val in_main       = Flipped(Decoupled(new ActiveApp))
+    val in_sub        = Flipped(Decoupled(new FrozenApp(comIdxs - 1)))
+    val out_main      = Decoupled(new ActiveApp)
+    val out_sub       = Decoupled(new ActiveApp)
+    val free_addr     = Output(Addr)
+    val addr_consumed = Input(UInt(2.W))
+  })
 
-//   val stmMain = RegInit(Stm.IDLE)
-//   val stmSub  = RegInit(StmSub.IDLE)
+  val stmMain       = RegInit(Stm.IDLE)
+  val stmSub        = RegInit(StmSub.IDLE)
+  val regInMain     = RegInit(0.U.asTypeOf(new ActiveApp))
+  val regInSub      = RegInit(0.U.asTypeOf(new FrozenApp(comIdxs - 1)))
+  val regAddr       = RegInit(0.U.asTypeOf(Addr))
+  val regIAddr      = RegInit(0.U.asTypeOf(Addr))
+  val regFather     = RegInit(0.U(log2Ceil(maxThreads).W))
+  val threadStacks  = Vec(maxThreads, new StackPort(threadStkDepth, Addr))
+  val _threadStacks =
+    Seq.fill(maxThreads)(Module(new RegStack(threadStkDepth, Addr)))
+  val frameStacks =
+    Vec(maxThreads, new StackPort(frameStkDepth, Vec(maxThreads, Addr)))
+  val _frameStacks =
+    Seq.fill(maxThreads)(
+      Module(new RegStack(threadStkDepth, Vec(maxThreads, Addr)))
+    )
+  val mainHeap      = Module(new MultiPortBlockMem(2, heapSize, new HeapCell))
+  val demandHeap    = Module(new MultiPortBlockMem(2, heapSize, Bool()))
+  val workingHeap   = Module(new MultiPortBlockMem(2, heapSize, Bool()))
+  val regOutMain    = RegInit(0.U.asTypeOf(new BitsWithValid(new ActiveApp)))
+  val regOutSub     = RegInit(0.U.asTypeOf(new BitsWithValid(new ActiveApp)))
+  val regBusy       = RegInit(false.B)
+  val regAddrBumper = RegInit(0.U.asTypeOf(Addr))
+  val regArgId      = RegInit(0.U(3.W)) // hardcode this should be fine
 
-//   // generate the CONSUMEs signal under current state
-//   def genCONSUMEs: CONSUMEs.Type = {
-//     val wire = Wire(CONSUMEs())
-//     when(!io.in_main.fire) {
-//       wire := CONSUMEs.NoInput
-//     }.otherwise {}
-//     wire
-//   }
+  // connect Vec of ports to underlying moduels
+  threadStacks.zip(_threadStacks).foreach { case (p, m) => p :<>= m.io }
+  frameStacks.zip(_frameStacks).foreach { case (p, m) => p :<>= m.io }
 
-//   switch(stmMain) {
-//     is(Stm.IDLE) {}
-//     is(Stm.WHNF) {}
-//     is(Stm.IA) {}
-//     is(Stm.RESUME) {}
-//   }
+  // generate the CONSUMEs signal under current state
+  def genCONSUMEs: CONSUMEs.Type = {
+    val wire = Wire(CONSUMEs())
+    when(!io.in_main.fire) {
+      wire := CONSUMEs.NoInput
+    }.otherwise {}
+    wire
+  }
 
-//   switch(stmSub) {
-//     is(StmSub.IDLE) {}
-//     is(StmSub.WORK) {}
-//   }
-// }
+  switch(stmMain) {
+    is(Stm.IDLE) {}
+    is(Stm.WHNF) {}
+    is(Stm.IA) {}
+    is(Stm.RESUME) {}
+  }
+
+  switch(stmSub) {
+    is(StmSub.IDLE) {}
+    is(StmSub.WORK) {}
+  }
+}

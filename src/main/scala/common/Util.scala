@@ -269,6 +269,7 @@ object Helper {
 
   def boolean2Comb(b: Boolean): Atom = if (b) Combinators.A else Combinators.K
 
+  def Addr = UInt(log2Ceil(heapSize).W)
 }
 
 /**

@@ -40,9 +40,19 @@ object SystemConfig {
   val heapSize = 512 * 1024
 
   /**
-   * thread resource in a core
+   * thread resource in a core (number of stacks)
    */
   val maxThreads = 8
+
+  /**
+   * depth of the thread stack in DrfHeap
+   */
+  val threadStkDepth = 512
+
+  /**
+   * depth of the frame stack in DrfHeap
+   */
+  val frameStkDepth = 64
 
   val atomPayloadSize = atomSize - AtomType.getWidth
 }

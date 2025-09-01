@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 
 import SystemConfig._
+import Helper._
 
 /**
  *   - NOP: non-op
@@ -93,6 +94,6 @@ class ActiveApp extends Bundle {
 }
 
 class FrozenApp(appLen: Int) extends Bundle {
-  val heap_addr = UInt(log2Ceil(heapSize).W)
+  val heap_addr = Addr
   val app       = Vec(appLen, new Atom)
 }

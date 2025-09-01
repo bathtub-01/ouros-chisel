@@ -24,7 +24,7 @@ class DecodeRecord extends Bundle {
  */
 class Reducer(pipelined: Boolean) extends Module {
   val io = IO(new Bundle {
-    val free_addr     = Input(UInt(log2Ceil(heapSize).W))
+    val free_addr     = Input(Addr)
     val in            = Flipped(Decoupled(new ActiveApp))
     val out_spine     = Decoupled(new ActiveApp)
     val out_app1      = Decoupled(new FrozenApp(comIdxs - 1))
