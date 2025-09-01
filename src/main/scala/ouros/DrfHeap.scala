@@ -9,6 +9,8 @@ import _root_.circt.stage.ChiselStage
 import common._
 import common.SystemConfig._
 import common.Helper._
+import ouros.RESUMEs.{TopInWHNF => TopInWHNF}
+import firtoolresolver.shaded.org.apache.commons.io.build.AbstractOrigin.WriterOrigin
 
 /**
  * States of the main state-machine
@@ -279,15 +281,49 @@ class DrfHeap extends Module {
     wire
   }
 
+  def consume_next(): Unit = {}
+
   switch(stmMain) {
     is(Stm.IDLE) {}
-    is(Stm.WHNF) {}
-    is(Stm.IA) {}
-    is(Stm.RESUME) {}
+    is(Stm.WHNF) {
+      switch(genWHNFs) {
+        is(WHNFs.MoreDmders) {}
+        is(WHNFs.NewFrame) {}
+        is(WHNFs.NoNewFrame) {}
+      }
+    }
+    is(Stm.IA) {
+      switch(genIAs1) {
+        is(IAs1.NoExist) {}
+        is(IAs1.ExistWHNF) {}
+        is(IAs1.ExistIAWorkingNormal) {}
+        is(IAs1.ExistIAWorkingNewFrame) {}
+        is(IAs1.ExistIAFresh) {}
+      }
+
+      switch(genIAs2) {
+        is(IAs2.NextStrictArgNewStk) {}
+        is(IAs2.NextStrictArgLocal) {}
+        is(IAs2.NoMoreArgsNoEmit) {}
+        is(IAs2.NoMoreArgsCanEmit) {}
+      }
+    }
+    is(Stm.RESUME) {
+      switch(genRESUMEs) {
+        is(RESUMEs.TopInWHNF) {}
+        is(RESUMEs.TopInIA) {}
+      }
+    }
   }
 
   switch(stmSub) {
     is(StmSub.IDLE) {}
-    is(StmSub.WORK) {}
+    is(StmSub.WORK) {
+      switch(genWORKs) {
+        is(WORKs.NotDemanded) {}
+        is(WORKs.DmderFound) {}
+        is(WORKs.DmderNotFound) {}
+      }
+    }
   }
 }
