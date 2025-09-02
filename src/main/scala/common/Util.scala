@@ -20,6 +20,8 @@ object Helper {
    *   - when returning `(app, None)`, `app` is the deref result
    *   - when returning `(app1, Some(app2))`, `app1` is the new cell to be
    *     emitted, `app2` need to be written back
+   *
+   * Optimisation: In reality, when arg_id > 0, the target is always a singleton
    */
   def deref(
       app: Vec[Atom],
@@ -29,9 +31,18 @@ object Helper {
   ): (Vec[Atom], Vec[Atom]) = {
     val targetLen = appLen(target)
     val res       = WireInit(0.U.asTypeOf(Vec(2 * maxAppLen - 1, new Atom)))
-    takeUInt(app, arg_id, res, 0.U)
-    takeUInt(target, targetLen, res, arg_id)
-    dropUInt(app, arg_id + 1.U, res, arg_id + targetLen)
+    when(arg_id === 0.U) {
+      for (i <- 0 until res.length) {
+        when(i.U < targetLen) {
+          res(i) := target(i.U)
+        }.elsewhen(i.U - targetLen + 1.U < maxAppLen.U) {
+          res(i) := app(i.U - targetLen + 1.U)
+        }
+      }
+    }.otherwise {
+      res.zip(app).foreach { case (r, a) => r := a }
+      res(arg_id) := target(0)
+    }
     val res1 = Wire(Vec(maxAppLen, new Atom))
     val res2 = Wire(Vec(maxAppLen, new Atom))
     res1 := res.slice(0, maxAppLen)

@@ -1,11 +1,12 @@
 import chisel3._
 import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.freespec.AnyFreeSpec
+import _root_.circt.stage.ChiselStage
 
 import common._
 import common.Helper._
 
-class Playground extends Module {
+class Deref extends Module {
   val io = IO(new Bundle {
     val app    = Input(Vec(8, new Atom))
     val tgt    = Input(Vec(8, new Atom))
@@ -18,25 +19,117 @@ class Playground extends Module {
   io.res2 := res2
 }
 
+object Deref extends App {
+  ChiselStage.emitSystemVerilogFile(
+    new Deref,
+    Array("--target-dir", "sv-gen"),
+    firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info")
+  )
+}
+
 class PlaySpec extends AnyFreeSpec with ChiselSim {
-  "play" in {
-    simulate(new Playground) { dut =>
-      val app = appBuilder(
-        8,
-        ptrBuilder(true, 11),
-        intBuilder(42),
-        yBuilder()
+  "deref" in {
+    simulate(new Deref) { dut =>
+      class Case(
+          val app: Vec[Atom],
+          val tgt: Vec[Atom],
+          val arg_id: UInt,
+          val res1: Vec[Atom],
+          val res2: Vec[Atom]
       )
-      val tgt = appBuilder(
-        8,
-        intBuilder(1),
-        intBuilder(2)
+      val case1 = new Case(
+        app = appBuilder(
+          8,
+          ptrBuilder(true, 11),
+          intBuilder(0),
+          yBuilder()
+        ),
+        tgt = appBuilder(
+          8,
+          intBuilder(1),
+          intBuilder(2)
+        ),
+        arg_id = 0.U,
+        res1 = appBuilder(
+          8,
+          intBuilder(1),
+          intBuilder(2),
+          intBuilder(0),
+          yBuilder()
+        ),
+        res2 = appBuilder(8)
       )
-      dut.io.app.poke(app)
-      dut.io.tgt.poke(tgt)
-      dut.io.arg_id.poke(0)
-      println(s"res1: ${dut.io.res1.peek()}")
-      println(s"res2: ${dut.io.res2.peek()}")
+
+      val case2 = new Case(
+        app = appBuilder(
+          8,
+          yBuilder(),
+          ptrBuilder(true, 11),
+          intBuilder(0),
+          yBuilder()
+        ),
+        tgt = appBuilder(
+          8,
+          intBuilder(1)
+        ),
+        arg_id = 1.U,
+        res1 = appBuilder(
+          8,
+          yBuilder(),
+          intBuilder(1),
+          intBuilder(0),
+          yBuilder()
+        ),
+        res2 = appBuilder(8)
+      )
+
+      val case3 = new Case(
+        app = appBuilder(
+          8,
+          ptrBuilder(true, 11),
+          intBuilder(0),
+          intBuilder(1),
+          intBuilder(2),
+          intBuilder(3),
+          intBuilder(4),
+          intBuilder(5)
+        ),
+        tgt = appBuilder(
+          8,
+          intBuilder(11),
+          intBuilder(22),
+          intBuilder(33),
+          intBuilder(44)
+        ),
+        arg_id = 0.U,
+        res1 = appBuilder(
+          8,
+          intBuilder(11),
+          intBuilder(22),
+          intBuilder(33),
+          intBuilder(44),
+          intBuilder(0),
+          intBuilder(1),
+          intBuilder(2),
+          intBuilder(3)
+        ),
+        res2 = appBuilder(
+          8,
+          ptrBuilder(true, 42),
+          intBuilder(4),
+          intBuilder(5)
+        )
+      )
+
+      dut.clock.step(3)
+      for (c <- Seq(case1, case2, case3)) {
+        dut.io.app.poke(c.app)
+        dut.io.tgt.poke(c.tgt)
+        dut.io.arg_id.poke(c.arg_id)
+        dut.io.res1.expect(c.res1)
+        dut.io.res2.expect(c.res2)
+      }
+
     }
   }
 
