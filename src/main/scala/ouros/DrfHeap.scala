@@ -137,8 +137,10 @@ class DrfHeap extends Module {
   val regArgId      = RegInit(0.U(3.W)) // hardcode this should be fine
 
   // some shorthands
-  val currentStk    = threadStacks(regInMain.stack_idx)
-  val currentFrmStk = frameStacks(regInMain.stack_idx)
+  val currentStk     = threadStacks(regInMain.stack_idx)
+  val currentFrmStk  = frameStacks(regInMain.stack_idx)
+  val incomingStk    = threadStacks(io.in_main.bits.stack_idx)
+  val incomingFrmStk = frameStacks(io.in_main.bits.stack_idx)
 
   // connect Vec of ports to underlying moduels
   threadStacks.zip(_threadStacks).foreach { case (p, m) => p :<>= m.io }
@@ -152,6 +154,54 @@ class DrfHeap extends Module {
 
   def findFreeStk(addr: UInt, stk: StackPort[StkCell]): Bool =
     stk.elms === 0.U || (stk.top.frame && stk.top.addr === addr)
+
+  def select1stArg(app: Vec[Atom]): (UInt, UInt) = {
+    val (pos, ptr) = (Wire(UInt(2.W)), Wire(Addr))
+    when(app(0).isPtr()) {
+      pos := 0.U
+      ptr := app(0).toPtr().pointer
+    }.elsewhen(app(0).isPrm()) {
+      when(app(1).isPtr()) {
+        pos := 1.U
+        ptr := app(1).toPtr().pointer
+      }.otherwise {
+        pos := 2.U
+        ptr := app(2).toPtr().pointer
+      }
+    }
+    (pos, ptr)
+  }
+
+  def writeIncoming(): Unit = {
+    incomingStk.pop
+    val cell = Wire(new HeapCell)
+    cell.exist := true.B
+    cell.app   := io.in_main.bits.app
+    mainHeap.writeA(cell, incomingStk.top.addr)
+  }
+
+  def readTarget(p: UInt): Unit = {
+    mainHeap.readA(p)
+    workingHeap.readA(p)
+    demandHeap.writeA(true.B, p)
+    regAddr := p
+  }
+
+  def select1stArgRead(app: Vec[Atom]): Unit = {
+    val (arg_id, ptr) = select1stArg(app)
+    readTarget(ptr)
+    regArgId := arg_id
+  }
+
+  def findPopRead(pr: (StackPort[StkCell]) => Bool, pop_frm: Boolean): Unit = {
+    val stkId = threadStacks.indexWhere(pr)
+    threadStacks(stkId).pop
+    if (pop_frm) {
+      frameStacks(stkId).pop
+    }
+    mainHeap.readA(threadStacks(stkId).snd.addr)
+    regInMain.stack_idx := stkId
+  }
 
   // generate the CONSUMEs signal under current state
   def genCONSUMEs: CONSUMEs.Type = {
@@ -281,49 +331,101 @@ class DrfHeap extends Module {
     wire
   }
 
-  def consume_next(): Unit = {}
+  // consume the next input
+  def nextMain(): Unit = {
+    regInMain := io.in_main.bits
+    switch(genCONSUMEs) {
+      is(CONSUMEs.NoInput) {
+        stmMain := Stm.IDLE
+      }
+      is(CONSUMEs.InputIA) {
+        select1stArgRead(io.in_main.bits.app)
+        regIAddr  := incomingStk.top.addr
+        regFather := io.in_main.bits.stack_idx
+        stmMain   := Stm.IA
+      }
+      is(CONSUMEs.InputWHNFWithDmder) {
+        findPopRead(findMoreDmder(incomingStk.top.addr, _), false)
+        regAddr := incomingStk.top.addr
+        stmMain := Stm.WHNF
+      }
+      is(CONSUMEs.InputWHNFNoDmderNewFrame) {
+        incomingStk.pop
+        mainHeap.readA(incomingStk.snd.addr)
+        regAddr := incomingStk.top.addr
+        incomingFrmStk.pop
+        stmMain := Stm.RESUME
+      }
+      is(CONSUMEs.InputWHNFNoDmderNoFrame) {
+        incomingFrmStk.pop
+        writeIncoming()
+        stmMain := Stm.IDLE
+      }
+    }
+  }
+
+  // consume the next input
+  def nextSub(): Unit = {}
+
+  def stepWHNF(): Unit = {
+    switch(genWHNFs) {
+      is(WHNFs.MoreDmders) {}
+      is(WHNFs.NewFrame) {}
+      is(WHNFs.NoNewFrame) {}
+    }
+  }
+
+  def stepIA(): Unit = {
+    switch(genIAs1) {
+      is(IAs1.NoExist) {}
+      is(IAs1.ExistWHNF) {}
+      is(IAs1.ExistIAWorkingNormal) {}
+      is(IAs1.ExistIAWorkingNewFrame) {}
+      is(IAs1.ExistIAFresh) {}
+    }
+
+    switch(genIAs2) {
+      is(IAs2.NextStrictArgNewStk) {}
+      is(IAs2.NextStrictArgLocal) {}
+      is(IAs2.NoMoreArgsNoEmit) {}
+      is(IAs2.NoMoreArgsCanEmit) {}
+    }
+  }
+
+  def stepRESUME(): Unit = {
+    switch(genRESUMEs) {
+      is(RESUMEs.TopInWHNF) {}
+      is(RESUMEs.TopInIA) {}
+    }
+  }
+
+  def stepWORK(): Unit = {
+    switch(genWORKs) {
+      is(WORKs.NotDemanded) {}
+      is(WORKs.DmderFound) {}
+      is(WORKs.DmderNotFound) {}
+    }
+  }
+
+  // TODO: add default inputs for sub-modules
 
   switch(stmMain) {
     is(Stm.IDLE) {}
     is(Stm.WHNF) {
-      switch(genWHNFs) {
-        is(WHNFs.MoreDmders) {}
-        is(WHNFs.NewFrame) {}
-        is(WHNFs.NoNewFrame) {}
-      }
+      stepWHNF()
     }
     is(Stm.IA) {
-      switch(genIAs1) {
-        is(IAs1.NoExist) {}
-        is(IAs1.ExistWHNF) {}
-        is(IAs1.ExistIAWorkingNormal) {}
-        is(IAs1.ExistIAWorkingNewFrame) {}
-        is(IAs1.ExistIAFresh) {}
-      }
-
-      switch(genIAs2) {
-        is(IAs2.NextStrictArgNewStk) {}
-        is(IAs2.NextStrictArgLocal) {}
-        is(IAs2.NoMoreArgsNoEmit) {}
-        is(IAs2.NoMoreArgsCanEmit) {}
-      }
+      stepIA()
     }
     is(Stm.RESUME) {
-      switch(genRESUMEs) {
-        is(RESUMEs.TopInWHNF) {}
-        is(RESUMEs.TopInIA) {}
-      }
+      stepRESUME()
     }
   }
 
   switch(stmSub) {
     is(StmSub.IDLE) {}
     is(StmSub.WORK) {
-      switch(genWORKs) {
-        is(WORKs.NotDemanded) {}
-        is(WORKs.DmderFound) {}
-        is(WORKs.DmderNotFound) {}
-      }
+      stepWORK()
     }
   }
 }

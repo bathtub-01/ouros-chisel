@@ -77,6 +77,10 @@ class Alu(pipelined: Boolean) extends Module {
 
   val resSeq: Seq[Atom] = aluOut +: io.in.bits.app.drop(3)
 
+  when(io.out.fire) {
+    outReg.valid := false.B
+  }
+
   when(io.in.fire) {
     outReg.valid          := true.B
     outReg.bits.stack_idx := io.in.bits.stack_idx

@@ -132,6 +132,19 @@ class Reducer(pipelined: Boolean) extends Module {
     0.U.asTypeOf(new BitsWithValid(new FrozenApp(comIdxs - 3)))
   )
 
+  when(io.out_spine.fire) {
+    spineReg.valid := false.B
+  }
+  when(io.out_app1.fire) {
+    app1Reg.valid := false.B
+  }
+  when(io.out_app2.fire) {
+    app2Reg.valid := false.B
+  }
+  when(io.out_app3.fire) {
+    app3Reg.valid := false.B
+  }
+
   when(io.in.fire) {
     // set reg contents
     spineReg.bits := resSpine

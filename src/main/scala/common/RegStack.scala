@@ -24,6 +24,25 @@ class StackPort[T <: Data](depth: Int, t: T) extends Bundle {
   val top    = Output(t)
   val snd    = Output(t)
   val elms   = Output(UInt(log2Ceil(depth + 1).W))
+
+  def init: Unit = {
+    this   := DontCare
+    opcode := StackOpCode.idle
+  }
+
+  def push(data: T) = {
+    opcode := StackOpCode.push
+    din    := data
+  }
+
+  def pop = {
+    opcode := StackOpCode.pop
+  }
+
+  def modify(data: T) = {
+    opcode := StackOpCode.modify
+    din    := data
+  }
 }
 
 class RegStack[T <: Data](depth: Int, t: T) extends Module {
@@ -92,9 +111,8 @@ class RegStack[T <: Data](depth: Int, t: T) extends Module {
     io.din    := data
   }
 
-  def pop: T = {
+  def pop = {
     io.opcode := StackOpCode.pop
-    io.top
   }
 
   def modify(data: T) = {
