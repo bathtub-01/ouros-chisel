@@ -7,10 +7,15 @@ import common.Helper._
 
 class Playground extends Module {
   val io = IO(new Bundle {
-    val app = Input(Vec(8, new Atom))
-    val len = Output(UInt(4.W))
+    val app    = Input(Vec(8, new Atom))
+    val tgt    = Input(Vec(8, new Atom))
+    val arg_id = Input(UInt(3.W))
+    val res1   = Output(Vec(8, new Atom))
+    val res2   = Output(Vec(8, new Atom))
   })
-  io.len := Helper.appLen(io.app)
+  val (res1, res2) = Helper.deref(io.app, io.arg_id, io.tgt, 42.U)
+  io.res1 := res1
+  io.res2 := res2
 }
 
 class PlaySpec extends AnyFreeSpec with ChiselSim {
@@ -18,17 +23,20 @@ class PlaySpec extends AnyFreeSpec with ChiselSim {
     simulate(new Playground) { dut =>
       val app = appBuilder(
         8,
-        yBuilder(),
+        ptrBuilder(true, 11),
         intBuilder(42),
-        yBuilder(),
-        yBuilder(),
-        yBuilder(),
-        yBuilder(),
-        yBuilder(),
         yBuilder()
       )
+      val tgt = appBuilder(
+        8,
+        intBuilder(1),
+        intBuilder(2)
+      )
       dut.io.app.poke(app)
-      println(s"appLen: ${dut.io.len.peekValue()}")
+      dut.io.tgt.poke(tgt)
+      dut.io.arg_id.poke(0)
+      println(s"res1: ${dut.io.res1.peek()}")
+      println(s"res2: ${dut.io.res2.peek()}")
     }
   }
 

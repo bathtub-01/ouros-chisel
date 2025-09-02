@@ -16,6 +16,34 @@ class BitsWithValid[T <: Data](t: T) extends Bundle {
 object Helper {
 
   /**
+   * Dereference `app`'s PTR at position `arg_id`, with `target`
+   *   - when returning `(app, None)`, `app` is the deref result
+   *   - when returning `(app1, Some(app2))`, `app1` is the new cell to be
+   *     emitted, `app2` need to be written back
+   */
+  def deref(
+      app: Vec[Atom],
+      arg_id: UInt,
+      target: Vec[Atom],
+      free_addr: UInt
+  ): (Vec[Atom], Vec[Atom]) = {
+    val targetLen = appLen(target)
+    val res       = WireInit(0.U.asTypeOf(Vec(2 * maxAppLen - 1, new Atom)))
+    takeUInt(app, arg_id, res, 0.U)
+    takeUInt(target, targetLen, res, arg_id)
+    dropUInt(app, arg_id + 1.U, res, arg_id + targetLen)
+    val res1 = Wire(Vec(maxAppLen, new Atom))
+    val res2 = Wire(Vec(maxAppLen, new Atom))
+    res1 := res.slice(0, maxAppLen)
+    when(res(maxAppLen).isNop()) {
+      res2 := 0.U.asTypeOf(res2)
+    }.otherwise {
+      res2 := makePtr(true.B, free_addr) +: res.slice(maxAppLen, res.length)
+    }
+    (res1, res2)
+  }
+
+  /**
    * Similar to `Vec.indexWhere`, but returns the length of the Vec when the
    * predicate fails for all elements (For `Vec.indexWhere`, it returns the idx
    * of the last element when all failed).
