@@ -9,9 +9,6 @@ import _root_.circt.stage.ChiselStage
 import common._
 import common.SystemConfig._
 import common.Helper._
-import ouros.RESUMEs.{TopInWHNF => TopInWHNF}
-import firtoolresolver.shaded.org.apache.commons.io.build.AbstractOrigin.WriterOrigin
-import ouros.Stm.{IDLE => IDLE}
 
 /**
  * States of the main state-machine
@@ -632,25 +629,38 @@ class DrfHeap extends Module {
   }
 
   // TODO: add default inputs for sub-modules
+  threadStacks.foreach(s => s.init())
+  frameStacks.foreach(s => s.init())
+
   // TODO: add blocking mechanism for output
+  when(
+    (!regOutMain.valid || io.out_main.ready) &&
+      (!regOutSub.valid || io.out_sub.ready)
+  ) {
+    mainHeap.init()
+    demandHeap.init()
+    workingHeap.init()
+    io.in_main.ready := false.B
+    io.in_sub.ready  := false.B
 
-  switch(stmMain) {
-    is(Stm.IDLE) {}
-    is(Stm.WHNF) {
-      stepWHNF()
+    switch(stmMain) {
+      is(Stm.IDLE) { nextMain() }
+      is(Stm.WHNF) { stepWHNF() }
+      is(Stm.IA) { stepIA() }
+      is(Stm.RESUME) { stepRESUME() }
     }
-    is(Stm.IA) {
-      stepIA()
-    }
-    is(Stm.RESUME) {
-      stepRESUME()
-    }
-  }
 
-  switch(stmSub) {
-    is(StmSub.IDLE) {}
-    is(StmSub.WORK) {
-      stepWORK()
+    switch(stmSub) {
+      is(StmSub.IDLE) { nextSub() }
+      is(StmSub.WORK) { stepWORK() }
     }
+  }.otherwise {
+    io.in_main.ready  := false.B
+    io.in_sub.ready   := false.B
+    io.out_main.valid := regOutMain.valid
+    io.out_main.bits  := regOutMain.bits
+    io.out_sub.valid  := regOutSub.valid
+    io.out_sub.bits   := regOutSub.bits
+    // TODO: maintain the reading of heaps
   }
 }
