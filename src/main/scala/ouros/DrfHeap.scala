@@ -154,6 +154,13 @@ class DrfHeap extends Module {
     wire
   }
 
+  def mkActiveApp(stk_id: UInt, app: Vec[Atom]): ActiveApp = {
+    val wire = Wire(new ActiveApp)
+    wire.stack_idx := stk_id
+    wire.app       := app
+    wire
+  }
+
   def findMoreDmder(addr: UInt, stk: StackPort[StkCell]): Bool =
     stk.elms > 1.U && stk.top.addr === addr && !stk.snd.frame
 
@@ -179,6 +186,8 @@ class DrfHeap extends Module {
     }
     (pos, ptr)
   }
+
+  def freeAddrLocal: UInt = regAddrBumper + io.addr_consumed
 
   def writeIncoming(): Unit = {
     incomingStk.pop
@@ -209,6 +218,23 @@ class DrfHeap extends Module {
     }
     mainHeap.readA(threadStacks(stkId).snd.addr)
     regInMain.stack_idx := stkId
+  }
+
+  def putOutputMain(stk_idx: UInt, app: Vec[Atom]): Unit = {
+    io.out_main.valid := true.B
+    io.out_main.bits  := mkActiveApp(stk_idx, app)
+    when(!io.out_main.ready) {
+      regOutMain.valid := true.B
+      regOutMain.bits  := mkActiveApp(stk_idx, app)
+    }
+  }
+
+  def writeWHNF(port: Boolean): Unit = {
+    if (!port) {
+      mainHeap.writeA(mkHeapCell(true.B, regInMain.app), regAddr)
+    } else {
+      mainHeap.writeB(mkHeapCell(true.B, regInMain.app), regAddr)
+    }
   }
 
   // generate the CONSUMEs signal under current state
@@ -397,10 +423,37 @@ class DrfHeap extends Module {
   }
 
   def stepWHNF(): Unit = {
+    val dmder          = mainHeap.readOutA.app
+    val target         = regInMain.app
+    val (dres1, dres2) =
+      deref(dmder, select1stArg(dmder)._1, target, freeAddrLocal)
+    putOutputMain(regInMain.stack_idx, dres1)
+
+    val port = Wire(Bool()) // false - A; true - B
     switch(genWHNFs) {
-      is(WHNFs.MoreDmders) {}
-      is(WHNFs.NewFrame) {}
-      is(WHNFs.NoNewFrame) {}
+      is(WHNFs.MoreDmders) {
+        findPopRead(findMoreDmder(regAddr, _), false)
+        port    := true.B
+        stmMain := Stm.WHNF
+      }
+      is(WHNFs.NewFrame) {
+        findPopRead(findMoreDmder(regAddr, _), true)
+        port    := true.B
+        stmMain := Stm.RESUME
+      }
+      is(WHNFs.NoNewFrame) {
+        val stkId: UInt =
+          threadStacks.indexWhere(s => s.elms >= 1.U && s.top.addr === regAddr)
+        threadStacks(stkId).pop
+        frameStacks(stkId).pop
+        writeWHNF(true) // avoid update here
+        port := false.B
+        when(dres2(0).isNop()) {
+          nextMain()
+        }.otherwise {
+          stmMain := Stm.IDLE
+        }
+      }
     }
   }
 
