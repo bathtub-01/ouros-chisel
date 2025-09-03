@@ -161,6 +161,13 @@ class DrfHeap extends Module {
     wire
   }
 
+  def mkStkCell(frame: Bool, addr: UInt): StkCell = {
+    val wire = Wire(new StkCell)
+    wire.frame := frame
+    wire.addr  := addr
+    wire
+  }
+
   def findMoreDmder(addr: UInt, stk: StackPort[StkCell]): Bool =
     stk.elms > 1.U && stk.top.addr === addr && !stk.snd.frame
 
@@ -188,6 +195,11 @@ class DrfHeap extends Module {
   }
 
   def freeAddrLocal: UInt = regAddrBumper + io.addr_consumed
+
+  def findDmdStk(): UInt =
+    threadStacks.indexWhere(s =>
+      s.elms >= 1.U && s.top.addr === regInSub.heap_addr
+    )
 
   def writeIncoming(): Unit = {
     incomingStk.pop
@@ -229,11 +241,30 @@ class DrfHeap extends Module {
     }
   }
 
-  def writeWHNF(port: Boolean): Unit = {
+  def putOutputSub(): Unit = {
+    val dmd = findDmdStk()
+    val app = extendToApp(regInSub.app)
+    io.out_sub.valid := true.B
+    io.out_sub.bits  := mkActiveApp(dmd, app)
+    when(!io.out_sub.ready) {
+      regOutSub.valid := true.B
+      regOutSub.bits  := mkActiveApp(dmd, app)
+    }
+  }
+
+  def writeBack(port: Boolean): Unit = {
     if (!port) {
       mainHeap.writeA(mkHeapCell(true.B, regInMain.app), regAddr)
     } else {
       mainHeap.writeB(mkHeapCell(true.B, regInMain.app), regAddr)
+    }
+  }
+
+  def writeBackBigDrf(app: Vec[Atom], port: Bool): Unit = {
+    when(!port) {
+      mainHeap.writeA(mkHeapCell(true.B, app), currentStk.top.addr)
+    }.otherwise {
+      mainHeap.writeB(mkHeapCell(true.B, app), currentStk.top.addr)
     }
   }
 
@@ -443,10 +474,14 @@ class DrfHeap extends Module {
       }
       is(WHNFs.NoNewFrame) {
         val stkId: UInt =
-          threadStacks.indexWhere(s => s.elms >= 1.U && s.top.addr === regAddr)
-        threadStacks(stkId).pop
-        frameStacks(stkId).pop
-        writeWHNF(true) // avoid update here
+          firstWhere(threadStacks) { s =>
+            s.elms >= 1.U && s.top.addr === regAddr
+          }
+        when(stkId =/= maxThreads.U) {
+          threadStacks(stkId).pop
+          frameStacks(stkId).pop
+        }
+        writeBack(true) // avoid update here
         port := false.B
         when(dres2(0).isNop()) {
           nextMain()
@@ -454,6 +489,11 @@ class DrfHeap extends Module {
           stmMain := Stm.IDLE
         }
       }
+    }
+
+    when(!dres2(0).isNop()) {
+      currentStk.push(mkStkCell(false.B, freeAddrLocal))
+      writeBackBigDrf(dres2, port)
     }
   }
 
@@ -483,13 +523,21 @@ class DrfHeap extends Module {
 
   def stepWORK(): Unit = {
     switch(genWORKs) {
-      is(WORKs.NotDemanded) {}
-      is(WORKs.DmderFound) {}
-      is(WORKs.DmderNotFound) {}
+      is(WORKs.NotDemanded) {
+        nextSub()
+      }
+      is(WORKs.DmderFound) {
+        putOutputSub()
+        nextSub()
+      }
+      is(WORKs.DmderNotFound) {
+        demandHeap.readB(regInSub.heap_addr)
+      }
     }
   }
 
   // TODO: add default inputs for sub-modules
+  // TODO: add blocking mechanism for output
 
   switch(stmMain) {
     is(Stm.IDLE) {}
