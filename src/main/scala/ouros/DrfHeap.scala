@@ -118,7 +118,6 @@ class DrfHeap extends Module {
   val regInSub     = RegInit(0.U.asTypeOf(new FrozenApp(comIdxs - 1)))
   val regAddr      = RegInit(0.U.asTypeOf(Addr))
   val regIAddr     = RegInit(0.U.asTypeOf(Addr))
-  val regFather    = RegInit(0.U(log2Ceil(maxThreads).W))
   val threadStacks = Vec(maxThreads, new StackPort(threadStkDepth, new StkCell))
   val _threadStacks =
     Seq.fill(maxThreads)(Module(new RegStack(threadStkDepth, new StkCell)))
@@ -194,6 +193,9 @@ class DrfHeap extends Module {
     (pos, ptr)
   }
 
+  def selectNextArg(app: Vec[Atom]): (UInt, UInt) =
+    (2.U, app(2).toPtr().pointer)
+
   def freeAddrLocal: UInt = regAddrBumper + io.addr_consumed
 
   def findDmdStk(): UInt =
@@ -201,8 +203,24 @@ class DrfHeap extends Module {
       s.elms >= 1.U && s.top.addr === regInSub.heap_addr
     )
 
+  def genFrameRecord(): Vec[UInt] = {
+    val wire = WireInit(currentFrmStk.top)
+    wire(regInMain.stack_idx) := ???
+    wire
+  }
+
+  def isSensitive(): Bool = {
+    val sensitive1 = genIAs1 === IAs1.ExistIAWorkingNormal
+    val sensitive2 = genIAs1 === IAs1.ExistIAFresh ||
+      genIAs1 === IAs1.NoExist
+    val same1 = incomingStk.top.addr === regAddr
+    val same2 =
+      currentStk.elms >= 1.U && currentStk.top.addr === incomingStk.top.addr
+    (sensitive1 && same1) || (sensitive2 && same2)
+  }
+
   def writeIncoming(): Unit = {
-    incomingStk.pop
+    incomingStk.pop()
     mainHeap.writeA(
       mkHeapCell(true.B, io.in_main.bits.app),
       incomingStk.top.addr
@@ -222,11 +240,17 @@ class DrfHeap extends Module {
     regArgId := arg_id
   }
 
+  def selectNextArgRead(app: Vec[Atom]): Unit = {
+    val (arg_id, ptr) = selectNextArg(app)
+    readTarget(ptr)
+    regArgId := arg_id
+  }
+
   def findPopRead(pr: (StackPort[StkCell]) => Bool, pop_frm: Boolean): Unit = {
     val stkId = threadStacks.indexWhere(pr)
-    threadStacks(stkId).pop
+    threadStacks(stkId).pop()
     if (pop_frm) {
-      frameStacks(stkId).pop
+      frameStacks(stkId).pop()
     }
     mainHeap.readA(threadStacks(stkId).snd.addr)
     regInMain.stack_idx := stkId
@@ -265,6 +289,30 @@ class DrfHeap extends Module {
       mainHeap.writeA(mkHeapCell(true.B, app), currentStk.top.addr)
     }.otherwise {
       mainHeap.writeB(mkHeapCell(true.B, app), currentStk.top.addr)
+    }
+  }
+
+  def pushTarget(new_frame: Bool): Unit = {
+    workingHeap.writeB(true.B, regAddr)
+    currentStk.push(mkStkCell(new_frame, regAddr))
+  }
+
+  def cancelNewFrame(): Unit = {
+    when(
+      genIAs1 === IAs1.ExistWHNF ||
+        genIAs1 === IAs1.ExistIAWorkingNewFrame
+    ) {
+      when(currentStk.elms >= 1.U && currentStk.top.frame) {
+        currentFrmStk.pop()
+      }
+    }
+  }
+
+  def stepToNext(): Unit = {
+    when(isSensitive()) {
+      stmMain := Stm.IDLE
+    }.otherwise {
+      nextMain()
     }
   }
 
@@ -405,9 +453,8 @@ class DrfHeap extends Module {
       }
       is(CONSUMEs.InputIA) {
         select1stArgRead(io.in_main.bits.app)
-        regIAddr  := incomingStk.top.addr
-        regFather := io.in_main.bits.stack_idx
-        stmMain   := Stm.IA
+        regIAddr := incomingStk.top.addr
+        stmMain  := Stm.IA
       }
       is(CONSUMEs.InputWHNFWithDmder) {
         findPopRead(findMoreDmder(incomingStk.top.addr, _), false)
@@ -415,14 +462,14 @@ class DrfHeap extends Module {
         stmMain := Stm.WHNF
       }
       is(CONSUMEs.InputWHNFNoDmderNewFrame) {
-        incomingStk.pop
+        incomingStk.pop()
         mainHeap.readA(incomingStk.snd.addr)
         regAddr := incomingStk.top.addr
-        incomingFrmStk.pop
+        incomingFrmStk.pop()
         stmMain := Stm.RESUME
       }
       is(CONSUMEs.InputWHNFNoDmderNoFrame) {
-        incomingFrmStk.pop
+        incomingFrmStk.pop()
         writeIncoming()
         stmMain := Stm.IDLE
       }
@@ -478,8 +525,8 @@ class DrfHeap extends Module {
             s.elms >= 1.U && s.top.addr === regAddr
           }
         when(stkId =/= maxThreads.U) {
-          threadStacks(stkId).pop
-          frameStacks(stkId).pop
+          threadStacks(stkId).pop()
+          frameStacks(stkId).pop()
         }
         writeBack(true) // avoid update here
         port := false.B
@@ -498,26 +545,74 @@ class DrfHeap extends Module {
   }
 
   def stepIA(): Unit = {
+    val dmder         = regInMain.app
+    val updated_dmder = WireInit(dmder)
+    val target        = mainHeap.readOutA.app
+
     switch(genIAs1) {
-      is(IAs1.NoExist) {}
-      is(IAs1.ExistWHNF) {}
-      is(IAs1.ExistIAWorkingNormal) {}
-      is(IAs1.ExistIAWorkingNewFrame) {}
-      is(IAs1.ExistIAFresh) {}
+      is(IAs1.NoExist) {
+        pushTarget(false.B)
+      }
+      is(IAs1.ExistWHNF) {
+        val (dres1, dres2) = deref(dmder, regArgId, target, io.free_addr)
+        updated_dmder := dres1
+        when(!dres2(0).isNop()) {
+          currentStk.push(mkStkCell(false.B, io.free_addr))
+          writeBackBigDrf(dres2, true.B)
+        }.otherwise {
+          regInMain.app := updated_dmder
+        }
+      }
+      is(IAs1.ExistIAWorkingNormal) {
+        pushTarget(true.B) // change this to false.B will disable riding
+      }
+      is(IAs1.ExistIAWorkingNewFrame) { /* do nothing here */ }
+      is(IAs1.ExistIAFresh) {
+        putOutputMain(regInMain.stack_idx, target)
+        pushTarget(false.B)
+      }
     }
 
     switch(genIAs2) {
-      is(IAs2.NextStrictArgNewStk) {}
-      is(IAs2.NextStrictArgLocal) {}
-      is(IAs2.NoMoreArgsNoEmit) {}
-      is(IAs2.NoMoreArgsCanEmit) {}
+      is(IAs2.NextStrictArgNewStk) {
+        selectNextArgRead(updated_dmder)
+        val frame_record = currentFrmStk.top
+        val stk_idx      = WireInit(0.U(log2Ceil(maxThreads).W))
+        for (i <- maxThreads - 1 to 0 by -1) {
+          when(findFreeStk(frame_record(i), threadStacks(i))) {
+            stk_idx := i.U
+          }
+        }
+        regInMain.stack_idx := stk_idx
+        frameStacks(stk_idx).push(genFrameRecord())
+      }
+      is(IAs2.NextStrictArgLocal) { selectNextArgRead(updated_dmder) }
+      is(IAs2.NoMoreArgsNoEmit) {
+        cancelNewFrame()
+        mainHeap.writeB(mkHeapCell(true.B, updated_dmder), regIAddr)
+        stepToNext()
+      }
+      is(IAs2.NoMoreArgsCanEmit) {
+        cancelNewFrame()
+        putOutputMain(regInMain.stack_idx, updated_dmder)
+        stepToNext()
+      }
     }
   }
 
   def stepRESUME(): Unit = {
+    writeBack(true)
     switch(genRESUMEs) {
-      is(RESUMEs.TopInWHNF) {}
-      is(RESUMEs.TopInIA) {}
+      is(RESUMEs.TopInWHNF) {
+        regInMain.app := mainHeap.readOutA.app
+        currentStk.pop()
+        mainHeap.readA(currentStk.snd.addr)
+        regAddr := currentStk.top.addr
+        stmMain := Stm.WHNF
+      }
+      is(RESUMEs.TopInIA) {
+        nextMain()
+      }
     }
   }
 
