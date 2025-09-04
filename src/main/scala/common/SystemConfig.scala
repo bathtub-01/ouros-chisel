@@ -54,5 +54,12 @@ object SystemConfig {
    */
   val frameStkDepth = 64
 
+  object BufferConfig {
+    val depth: Int       = maxThreads
+    val pipe: Boolean    = false
+    val flow: Boolean    = false
+    val syncMem: Boolean = false
+  }
+
   val atomPayloadSize = atomSize - AtomType.getWidth
 }
