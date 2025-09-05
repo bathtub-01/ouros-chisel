@@ -22,8 +22,9 @@ import Dest._
  */
 class Ouros extends Module {
   val io = IO(new Bundle {
-    val start = Input(Bool())
-    val done  = Output(Bool())
+    val start  = Input(Bool())
+    val inject = Flipped(Valid(Vec(maxAppLen, new Atom)))
+    val done   = Output(Bool())
   })
 
   def getDest(app: Vec[Atom]): Dest.Type = {
@@ -58,6 +59,7 @@ class Ouros extends Module {
   val wireToAlu1 = wireGen
   val wireToAlu2 = wireGen
 
+  // sub-modules -> buffers
   when(dheap.io.out_main.valid) {
     switch(getDest(dheap.io.out_main.bits.app)) {
       is(ToDheap) { wireToDheapA0 :<>= dheap.io.out_main }
@@ -109,4 +111,40 @@ class Ouros extends Module {
   val bufferAlu1 = Queue(wireToAlu1, depth, pipe, flow, syncMem)
   val bufferAlu2 = Queue(wireToAlu2, depth, pipe, flow, syncMem)
   val arbiterAlu = Module(new RRArbiter(new ActiveApp, 3, true))
+
+  // buffers -> arbiters
+  arbiterDheapA.io.in
+    .zip(
+      Seq(bufferDheapA0, bufferDheapA1, bufferDheapA2, bufferDheapA3)
+    )
+    .foreach { case (a, b) => a :<>= b }
+
+  arbiterDheapB.io.in
+    .zip(Seq(bufferDheapB0, bufferDheapB1, bufferDheapB2))
+    .foreach { case (a, b) => a :<>= b }
+
+  arbiterReducr.io.in
+    .zip(
+      Seq(bufferReducr0, bufferReducr1, bufferReducr2, bufferReducr3)
+    )
+    .foreach { case (a, b) => a :<>= b }
+
+  arbiterAlu.io.in
+    .zip(Seq(bufferAlu0, bufferAlu1, bufferAlu2))
+    .foreach { case (a, b) => a :<>= b }
+
+  // arbiters -> sub-modules
+  dheap.io.in_main :<>= arbiterDheapA.io.out
+  dheap.io.in_sub  :<>= arbiterDheapB.io.out
+  reducr.io.in     :<>= arbiterReducr.io.out
+  alu.io.in        :<>= arbiterAlu.io.out
+
+  // gc signals
+  reducr.io.free_addr    := dheap.io.free_addr
+  dheap.io.addr_consumed := reducr.io.addr_consumed
+
+  // non-essential ports
+  dheap.io.inject := io.inject
+  dheap.io.start  := io.start
+  io.done         := dheap.io.done
 }

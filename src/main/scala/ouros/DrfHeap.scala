@@ -107,8 +107,13 @@ class DrfHeap extends Module {
     val out_sub       = Decoupled(new ActiveApp)
     val free_addr     = Output(Addr)
     val addr_consumed = Input(UInt(2.W))
+    // ============ non-essential ports ===================
+    val inject = Flipped(Valid(Vec(maxAppLen, new Atom)))
+    val start  = Input(Bool())
+    val done   = Output(Bool())
   })
 
+  val busy         = RegInit(false.B)
   val stmMain      = RegInit(Stm.IDLE)
   val stmSub       = RegInit(StmSub.IDLE)
   val regInMain    = RegInit(0.U.asTypeOf(new ActiveApp))
@@ -626,6 +631,19 @@ class DrfHeap extends Module {
         demandHeap.readB(regInSub.heap_addr)
       }
     }
+  }
+
+  // program injection
+  when(!busy && io.inject.valid) {
+    mainHeap.writeA(mkHeapCell(true.B, io.inject.bits), regAddrBumper)
+    regAddrBumper := regAddrBumper + 1.U
+  }
+  io.done := !busy
+
+  when(io.start && !busy) {
+    busy := true.B
+    frameStacks(0).push(0.U.asTypeOf(Vec(maxThreads, UInt())))
+    putOutputMain(0.U, appBuilder(8, ptrBuilder(false, 0)))
   }
 
   // TODO: add default inputs for sub-modules
