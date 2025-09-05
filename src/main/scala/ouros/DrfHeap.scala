@@ -120,29 +120,31 @@ class DrfHeap extends Module {
   val regInSub     = RegInit(0.U.asTypeOf(new FrozenApp(comIdxs - 1)))
   val regAddr      = RegInit(0.U.asTypeOf(Addr))
   val regIAddr     = RegInit(0.U.asTypeOf(Addr))
-  val threadStacks = Vec(maxThreads, new StackPort(threadStkDepth, new StkCell))
+  val threadStacks = Wire(
+    Vec(maxThreads, new StackPort(threadStkDepth, new StkCell))
+  )
   val _threadStacks =
     Seq.fill(maxThreads)(Module(new RegStack(threadStkDepth, new StkCell)))
   val frameStacks =
-    Vec(maxThreads, new StackPort(frameStkDepth, Vec(maxThreads, Addr)))
+    Wire(Vec(maxThreads, new StackPort(frameStkDepth, Vec(maxThreads, Addr))))
   val _frameStacks =
     Seq.fill(maxThreads)(
-      Module(new RegStack(threadStkDepth, Vec(maxThreads, Addr)))
+      Module(new RegStack(frameStkDepth, Vec(maxThreads, Addr)))
     )
   val mainHeap      = Module(new DualPortBlockMem(heapSize, new HeapCell))
   val demandHeap    = Module(new DualPortBlockMem(heapSize, Bool()))
   val workingHeap   = Module(new DualPortBlockMem(heapSize, Bool()))
-  val regOutMain    = RegInit(0.U.asTypeOf(new BitsWithValid(new ActiveApp)))
-  val regOutSub     = RegInit(0.U.asTypeOf(new BitsWithValid(new ActiveApp)))
   val regBusy       = RegInit(false.B)
   val regAddrBumper = RegInit(0.U.asTypeOf(Addr))
   val regArgId      = RegInit(0.U(3.W)) // hardcode this should be fine
+  val needSplit     = WireInit(false.B)
+  val bBorrowed     = WireInit(false.B)
 
   // some shorthands
-  val currentStk     = threadStacks(regInMain.stack_idx)
-  val currentFrmStk  = frameStacks(regInMain.stack_idx)
-  val incomingStk    = threadStacks(io.in_main.bits.stack_idx)
-  val incomingFrmStk = frameStacks(io.in_main.bits.stack_idx)
+  def currentStk     = threadStacks(regInMain.stack_idx)
+  def currentFrmStk  = frameStacks(regInMain.stack_idx)
+  def incomingStk    = threadStacks(io.in_main.bits.stack_idx)
+  def incomingFrmStk = frameStacks(io.in_main.bits.stack_idx)
 
   // connect Vec of ports to underlying moduels
   threadStacks.zip(_threadStacks).foreach { case (p, m) => p :<>= m.io }
@@ -191,6 +193,9 @@ class DrfHeap extends Module {
         pos := 2.U
         ptr := app(2).toPtr().pointer
       }
+    }.otherwise { // save this for seq
+      pos := 0.U
+      ptr := app(0).toPtr().pointer
     }
     (pos, ptr)
   }
@@ -207,7 +212,7 @@ class DrfHeap extends Module {
 
   def genFrameRecord(): Vec[UInt] = {
     val wire = WireInit(currentFrmStk.top)
-    wire(regInMain.stack_idx) := ???
+    wire(regInMain.stack_idx) := mainHeap.io.readwritePorts(0).address
     wire
   }
 
@@ -261,10 +266,6 @@ class DrfHeap extends Module {
   def putOutputMain(stk_idx: UInt, app: Vec[Atom]): Unit = {
     io.out_main.valid := true.B
     io.out_main.bits  := mkActiveApp(stk_idx, app)
-    when(!io.out_main.ready) {
-      regOutMain.valid := true.B
-      regOutMain.bits  := mkActiveApp(stk_idx, app)
-    }
   }
 
   def putOutputSub(): Unit = {
@@ -272,10 +273,6 @@ class DrfHeap extends Module {
     val app = extendToApp(regInSub.app)
     io.out_sub.valid := true.B
     io.out_sub.bits  := mkActiveApp(dmd, app)
-    when(!io.out_sub.ready) {
-      regOutSub.valid := true.B
-      regOutSub.bits  := mkActiveApp(dmd, app)
-    }
   }
 
   def writeBack(port: Boolean): Unit = {
@@ -448,7 +445,8 @@ class DrfHeap extends Module {
 
   // consume the next input
   def nextMain(): Unit = {
-    regInMain := io.in_main.bits
+    io.in_main.ready := io.out_main.ready
+    regInMain        := io.in_main.bits
     switch(genCONSUMEs) {
       is(CONSUMEs.NoInput) {
         stmMain := Stm.IDLE
@@ -480,6 +478,7 @@ class DrfHeap extends Module {
 
   // consume the next input
   def nextSub(): Unit = {
+    io.in_sub.ready := io.out_sub.ready && !bBorrowed
     val addr = io.in_sub.bits.heap_addr
     when(io.in_sub.fire) {
       mainHeap.writeB(
@@ -509,19 +508,22 @@ class DrfHeap extends Module {
       deref(dmder, select1stArg(dmder)._1, target, freeAddrLocal)
     putOutputMain(regInMain.stack_idx, dres1)
 
-    val port = Wire(Bool()) // false - A; true - B
+    val port = WireInit(false.B) // false - A; true - B
     switch(genWHNFs) {
       is(WHNFs.MoreDmders) {
+        bBorrowed := needSplit
         findPopRead(findMoreDmder(regAddr, _), false)
         port    := true.B
         stmMain := Stm.WHNF
       }
       is(WHNFs.NewFrame) {
+        bBorrowed := needSplit
         findPopRead(findMoreDmder(regAddr, _), true)
         port    := true.B
         stmMain := Stm.RESUME
       }
       is(WHNFs.NoNewFrame) {
+        bBorrowed := true.B
         val stkId: UInt =
           firstWhere(threadStacks) { s =>
             s.elms >= 1.U && s.top.addr === regAddr
@@ -541,6 +543,7 @@ class DrfHeap extends Module {
     }
 
     when(!dres2(0).isNop()) {
+      needSplit := true.B
       currentStk.push(mkStkCell(false.B, freeAddrLocal))
       writeBackBigDrf(dres2, port)
     }
@@ -559,6 +562,7 @@ class DrfHeap extends Module {
         val (dres1, dres2) = deref(dmder, regArgId, target, io.free_addr)
         updated_dmder := dres1
         when(!dres2(0).isNop()) {
+          needSplit := true.B
           currentStk.push(mkStkCell(false.B, io.free_addr))
           writeBackBigDrf(dres2, true.B)
         }.otherwise {
@@ -566,7 +570,7 @@ class DrfHeap extends Module {
         }
       }
       is(IAs1.ExistIAWorkingNormal) {
-        pushTarget(true.B) // change this to false.B will disable riding
+        pushTarget(true.B) // change this to false.B will disable stk riding
       }
       is(IAs1.ExistIAWorkingNewFrame) { /* do nothing here */ }
       is(IAs1.ExistIAFresh) {
@@ -590,11 +594,13 @@ class DrfHeap extends Module {
       }
       is(IAs2.NextStrictArgLocal) { selectNextArgRead(updated_dmder) }
       is(IAs2.NoMoreArgsNoEmit) {
+        bBorrowed := true.B
         cancelNewFrame()
         mainHeap.writeB(mkHeapCell(true.B, updated_dmder), regIAddr)
         stepToNext()
       }
       is(IAs2.NoMoreArgsCanEmit) {
+        bBorrowed := genIAs1 === IAs1.ExistWHNF && needSplit
         cancelNewFrame()
         putOutputMain(regInMain.stack_idx, updated_dmder)
         stepToNext()
@@ -603,6 +609,7 @@ class DrfHeap extends Module {
   }
 
   def stepRESUME(): Unit = {
+    bBorrowed := true.B
     writeBack(true)
     switch(genRESUMEs) {
       is(RESUMEs.TopInWHNF) {
@@ -633,34 +640,49 @@ class DrfHeap extends Module {
     }
   }
 
-  // program injection
+  // give default connection
+  threadStacks.foreach(s => s.init())
+  frameStacks.foreach(s => s.init())
+  mainHeap.init()
+  demandHeap.init()
+  workingHeap.init()
+  io.in_main.ready  := false.B
+  io.in_sub.ready   := false.B
+  io.out_main.valid := false.B
+  io.out_main.bits  := DontCare
+  io.out_sub.valid  := false.B
+  io.out_sub.bits   := DontCare
+  io.free_addr      := regAddrBumper
+  regAddrBumper     := regAddrBumper + io.addr_consumed + needSplit.asUInt
+
+  // program injection & start/end control
   when(!busy && io.inject.valid) {
     mainHeap.writeA(mkHeapCell(true.B, io.inject.bits), regAddrBumper)
     regAddrBumper := regAddrBumper + 1.U
   }
+
   io.done := !busy
 
   when(io.start && !busy) {
     busy := true.B
-    frameStacks(0).push(0.U.asTypeOf(Vec(maxThreads, UInt())))
+    frameStacks(0).push(0.U.asTypeOf(Vec(maxThreads, Addr)))
     putOutputMain(0.U, appBuilder(8, ptrBuilder(false, 0)))
   }
 
-  // TODO: add default inputs for sub-modules
-  threadStacks.foreach(s => s.init())
-  frameStacks.foreach(s => s.init())
+  when(io.in_main.fire) {
+    when(
+      threadStacks(0).elms === 1.U &&
+        io.in_main.bits.stack_idx === 0.U &&
+        isWHNF(io.in_main.bits.app)
+    ) {
+      busy := false.B
+    }
+  }
 
-  // TODO: add blocking mechanism for output
-  when(
-    (!regOutMain.valid || io.out_main.ready) &&
-      (!regOutSub.valid || io.out_sub.ready)
-  ) {
-    mainHeap.init()
-    demandHeap.init()
-    workingHeap.init()
-    io.in_main.ready := false.B
-    io.in_sub.ready  := false.B
-
+  // NOTICE: assume the output of DrfHeap is never blocked.
+  //   This is possible as long as the length of its output buffer
+  //   is not smaller than maxThreads.
+  when(busy) {
     switch(stmMain) {
       is(Stm.IDLE) { nextMain() }
       is(Stm.WHNF) { stepWHNF() }
@@ -672,13 +694,13 @@ class DrfHeap extends Module {
       is(StmSub.IDLE) { nextSub() }
       is(StmSub.WORK) { stepWORK() }
     }
-  }.otherwise {
-    io.in_main.ready  := false.B
-    io.in_sub.ready   := false.B
-    io.out_main.valid := regOutMain.valid
-    io.out_main.bits  := regOutMain.bits
-    io.out_sub.valid  := regOutSub.valid
-    io.out_sub.bits   := regOutSub.bits
-    // TODO: maintain the reading of heaps
   }
+}
+
+object DrfHeap extends App {
+  ChiselStage.emitSystemVerilogFile(
+    new DrfHeap,
+    Array("--target-dir", "sv-gen"),
+    firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info")
+  )
 }

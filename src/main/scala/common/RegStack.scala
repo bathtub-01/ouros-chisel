@@ -26,7 +26,7 @@ class StackPort[T <: Data](depth: Int, t: T) extends Bundle {
   val elms   = Output(UInt(log2Ceil(depth + 1).W))
 
   def init(): Unit = {
-    this   := DontCare
+    din    := DontCare
     opcode := StackOpCode.idle
   }
 

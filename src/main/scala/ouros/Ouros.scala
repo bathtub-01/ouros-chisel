@@ -40,6 +40,12 @@ class Ouros extends Module {
   }
 
   def wireGen = WireInit(0.U.asTypeOf(new DecoupledIO(new ActiveApp)))
+  def exFrozen(fa: FrozenApp): FrozenApp = {
+    val res = Wire(new FrozenApp(comIdxs - 1))
+    res.heap_addr := fa.heap_addr
+    res.app       := extendToApp(fa.app, comIdxs - 1)
+    res
+  }
 
   val dheap  = Module(new DrfHeap)
   val reducr = Module(new Reducer(pipelined = true))
@@ -59,6 +65,10 @@ class Ouros extends Module {
   val wireToAlu1 = wireGen
   val wireToAlu2 = wireGen
 
+  dheap.io.out_main.ready   := false.B
+  dheap.io.out_sub.ready    := false.B
+  reducr.io.out_spine.ready := false.B
+  alu.io.out.ready          := false.B
   // sub-modules -> buffers
   when(dheap.io.out_main.valid) {
     switch(getDest(dheap.io.out_main.bits.app)) {
@@ -120,7 +130,13 @@ class Ouros extends Module {
     .foreach { case (a, b) => a :<>= b }
 
   arbiterDheapB.io.in
-    .zip(Seq(bufferDheapB0, bufferDheapB1, bufferDheapB2))
+    .zip(
+      Seq(
+        bufferDheapB0,
+        bufferDheapB1.map(exFrozen(_)),
+        bufferDheapB2.map(exFrozen((_)))
+      )
+    )
     .foreach { case (a, b) => a :<>= b }
 
   arbiterReducr.io.in
@@ -147,4 +163,12 @@ class Ouros extends Module {
   dheap.io.inject := io.inject
   dheap.io.start  := io.start
   io.done         := dheap.io.done
+}
+
+object Ouros extends App {
+  ChiselStage.emitSystemVerilogFile(
+    new Ouros,
+    Array("--target-dir", "sv-gen"),
+    firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info")
+  )
 }

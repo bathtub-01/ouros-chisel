@@ -76,7 +76,7 @@ object Helper {
    *   appLen([+, 1, 2, NOP]) = 3
    */
   def appLen(app: Vec[Atom]): UInt =
-    Helper.firstWhere(app) { _.asUInt === 0.U }
+    Helper.firstWhere(app) { _.isNop() }
 
   /**
    * The arity of an Atom.
@@ -112,9 +112,9 @@ object Helper {
    *
    * For shorter sequences, extend the length with NOPs
    */
-  def extendToApp(atms: Seq[Atom]): Vec[Atom] = {
+  def extendToApp(atms: Seq[Atom], length: Int = maxAppLen): Vec[Atom] = {
     require(atms.length <= maxAppLen)
-    val res = WireInit(0.U.asTypeOf(Vec(maxAppLen, new Atom)))
+    val res = WireInit(0.U.asTypeOf(Vec(length, new Atom)))
     res.zip(atms).foreach { case (to, from) =>
       to := from
     }

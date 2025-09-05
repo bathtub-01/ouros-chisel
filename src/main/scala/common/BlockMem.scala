@@ -70,7 +70,10 @@ class DualPortBlockMem[T <: Data](depth: Int, t: T) extends Module {
   io :<>= SRAM(depth, t, 0, 0, 2)
 
   def init() = {
-    io.readwritePorts.foreach(p => p.enable := false.B)
+    io.readwritePorts.foreach { p =>
+      p        := DontCare
+      p.enable := false.B
+    }
   }
 
   def readA(addr: UInt) = {
