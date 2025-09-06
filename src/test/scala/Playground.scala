@@ -40,7 +40,7 @@ class PlaySpec extends AnyFreeSpec with ChiselSim {
       val case1 = new Case(
         app = appBuilder(
           8,
-          ptrBuilder(true, 11),
+          ptrBuilder(11),
           intBuilder(0),
           yBuilder()
         ),
@@ -64,7 +64,7 @@ class PlaySpec extends AnyFreeSpec with ChiselSim {
         app = appBuilder(
           8,
           yBuilder(),
-          ptrBuilder(true, 11),
+          ptrBuilder(11),
           intBuilder(0),
           yBuilder()
         ),
@@ -86,7 +86,7 @@ class PlaySpec extends AnyFreeSpec with ChiselSim {
       val case3 = new Case(
         app = appBuilder(
           8,
-          ptrBuilder(true, 11),
+          ptrBuilder(11),
           intBuilder(0),
           intBuilder(1),
           intBuilder(2),
@@ -115,7 +115,7 @@ class PlaySpec extends AnyFreeSpec with ChiselSim {
         ),
         res2 = appBuilder(
           8,
-          ptrBuilder(true, 42),
+          ptrBuilder(42, true),
           intBuilder(4),
           intBuilder(5)
         )

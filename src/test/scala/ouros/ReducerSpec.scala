@@ -47,7 +47,7 @@ class ReducerSpec extends AnyFreeSpec with ChiselSim {
       _.app       -> appBuilder(
         maxAppLen,
         intBuilder(2),
-        ptrBuilder(true, 42),
+        ptrBuilder(42, true),
         intBuilder(4),
         intBuilder(5)
       )
@@ -57,7 +57,7 @@ class ReducerSpec extends AnyFreeSpec with ChiselSim {
       _.app       -> appBuilder(
         comIdxs - 1,
         intBuilder(3),
-        ptrBuilder(true, 43)
+        ptrBuilder(43, true)
       )
     )
     val out_app2 = (new FrozenApp(comIdxs - 2)).Lit(
@@ -65,7 +65,7 @@ class ReducerSpec extends AnyFreeSpec with ChiselSim {
       _.app       -> appBuilder(
         comIdxs - 2,
         intBuilder(0),
-        ptrBuilder(true, 44)
+        ptrBuilder(44, true)
       )
     )
     val out_app3 = (new FrozenApp(comIdxs - 3)).Lit(
@@ -112,7 +112,7 @@ class ReducerSpec extends AnyFreeSpec with ChiselSim {
       _.app       -> appBuilder(
         maxAppLen,
         intBuilder(0),
-        ptrBuilder(false, 45),
+        ptrBuilder(45, false),
         intBuilder(1),
         intBuilder(2),
         intBuilder(3),
@@ -125,7 +125,7 @@ class ReducerSpec extends AnyFreeSpec with ChiselSim {
       _.app       -> appBuilder(
         comIdxs - 1,
         intBuilder(0),
-        ptrBuilder(false, 45)
+        ptrBuilder(45, false)
       )
     )
     val addr_consumed = 1.U

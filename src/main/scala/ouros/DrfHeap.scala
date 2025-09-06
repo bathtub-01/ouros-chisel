@@ -658,6 +658,7 @@ class DrfHeap extends Module {
   // program injection & start/end control
   when(!busy && io.inject.valid) {
     mainHeap.writeA(mkHeapCell(true.B, io.inject.bits), regAddrBumper)
+    workingHeap.writeA(false.B, regAddrBumper)
     regAddrBumper := regAddrBumper + 1.U
   }
 
@@ -666,7 +667,7 @@ class DrfHeap extends Module {
   when(io.start && !busy) {
     busy := true.B
     frameStacks(0).push(0.U.asTypeOf(Vec(maxThreads, Addr)))
-    putOutputMain(0.U, appBuilder(8, ptrBuilder(false, 0)))
+    putOutputMain(0.U, appBuilder(8, ptrBuilder(0, false)))
   }
 
   when(io.in_main.fire) {

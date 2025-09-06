@@ -201,7 +201,7 @@ object Helper {
   /**
    * Literal PTR builder
    */
-  def ptrBuilder(unique: Boolean, pointer: Int): Atom =
+  def ptrBuilder(pointer: Int, unique: Boolean = false): Atom =
     (new Atom).Lit(
       _.atomType -> AtomType.PTR,
       _.payload  -> (new PtrPayload)
@@ -305,6 +305,9 @@ object Helper {
 
   def appBuilder(length: Int, atoms: Atom*): Vec[Atom] =
     Vec.Lit(padWith(atoms.toSeq, length, nopBuilder): _*)
+
+  def appBuilder(atoms: Atom*): Vec[Atom] =
+    Vec.Lit(padWith(atoms.toSeq, maxAppLen, nopBuilder): _*)
 
   def boolean2Comb(b: Boolean): Atom = if (b) Combinators.A else Combinators.K
 

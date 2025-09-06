@@ -42,3 +42,6 @@ run:
 # This prevents make from treating the test class name as a target
 %:
 	@:
+	
+clean-sv:
+	rm -rf ./sv-gen

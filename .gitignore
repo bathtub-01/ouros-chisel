@@ -352,3 +352,6 @@ sv-gen/
 
 # simulation output
 simu-out/
+
+# gtkwave
+dbg.gtkw

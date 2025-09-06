@@ -70,6 +70,7 @@ class Ouros extends Module {
   reducr.io.out_spine.ready := false.B
   alu.io.out.ready          := false.B
   // sub-modules -> buffers
+  dheap.io.out_main.ready := true.B
   when(dheap.io.out_main.valid) {
     switch(getDest(dheap.io.out_main.bits.app)) {
       is(ToDheap) { wireToDheapA0 :<>= dheap.io.out_main }
@@ -78,6 +79,7 @@ class Ouros extends Module {
     }
   }
 
+  dheap.io.out_sub.ready := true.B
   when(dheap.io.out_sub.valid) {
     switch(getDest(dheap.io.out_sub.bits.app)) {
       is(ToDheap) { wireToDheapA3 :<>= dheap.io.out_sub }
