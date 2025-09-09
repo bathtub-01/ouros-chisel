@@ -342,6 +342,7 @@ hs_err_pid*
 
 # chisel generated files
 sv-gen/
+sv-gen-o0/
 
 # scalafmt config file
 .scalafmt.conf

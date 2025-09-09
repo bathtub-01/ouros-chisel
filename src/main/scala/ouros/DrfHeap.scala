@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.BundleLiterals._
 import chisel3.experimental.VecLiterals._
+import chisel3.util.experimental.loadMemoryFromFileInline
 import _root_.circt.stage.ChiselStage
 
 import common._

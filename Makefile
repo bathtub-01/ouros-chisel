@@ -18,7 +18,7 @@ test-vcd:
 		echo "Example: make test-vcd gcd.GCDSpec"; \
 		exit 1; \
 	fi
-	sbt --mem 8000 'testOnly $(filter-out test-vcd,$(MAKECMDGOALS)) -- -DemitVcd=1'
+	sbt --mem 8000 'testOnly $(filter-out test-vcd,$(MAKECMDGOALS)) -- -DemitVcd=1 -DfirtoolOpts=-disable-all-randomization'
 	
 test:
 	@if [ "$(filter-out test,$(MAKECMDGOALS))" = "" ]; then \
@@ -27,7 +27,7 @@ test:
 		echo "Example: make test gcd.GCDSpec"; \
 		exit 1; \
 	fi
-	sbt --mem 8000 'testOnly $(filter-out test,$(MAKECMDGOALS))'
+	sbt --mem 8000 'testOnly $(filter-out test,$(MAKECMDGOALS)) -- -DfirtoolOpts=-disable-all-randomization'
 
 # Run target that takes the main class as an argument
 run:
@@ -44,4 +44,4 @@ run:
 	@:
 	
 clean-sv:
-	rm -rf ./sv-gen
+	rm -rf ./sv-gen/*
