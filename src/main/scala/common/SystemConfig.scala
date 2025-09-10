@@ -37,7 +37,7 @@ object SystemConfig {
   /**
    * cells in the heap
    */
-  val heapSize = 2 * 1024
+  val heapSize = 256 * 1024 // 2 * 1024
 
   /**
    * thread resource in a core (number of stacks)
@@ -47,7 +47,7 @@ object SystemConfig {
   /**
    * depth of the thread stack in DrfHeap
    */
-  val threadStkDepth = 256
+  val threadStkDepth = 512 // 256
 
   /**
    * depth of the frame stack in DrfHeap

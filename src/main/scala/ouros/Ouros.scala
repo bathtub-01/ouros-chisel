@@ -31,7 +31,7 @@ class Ouros extends Module {
     val wire = Wire(Dest())
     when(app(0).isPrm() && app(1).isInt() && app(2).isInt()) {
       wire := ToAlu
-    }.elsewhen(!isWHNF(app) && app(0).isCom()) {
+    }.elsewhen(!isWHNF(app) && (app(0).isCom()) || app(0).isY()) {
       wire := ToReducr
     }.otherwise {
       wire := ToDheap

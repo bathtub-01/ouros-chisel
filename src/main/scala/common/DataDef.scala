@@ -90,6 +90,7 @@ class Atom extends Bundle {
   def isNop(): Bool = this.atomType === AtomType.NOP
   def isPtr(): Bool = this.atomType === AtomType.PTR
   def isCom(): Bool = this.atomType === AtomType.COM
+  def isY(): Bool   = this.atomType === AtomType.Y
   def isInt(): Bool = this.atomType === AtomType.INT
   def isPrm(): Bool = this.atomType === AtomType.PRM
 }

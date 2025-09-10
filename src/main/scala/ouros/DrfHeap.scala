@@ -346,10 +346,10 @@ class DrfHeap extends Module {
   // generate the WHNFs signal under current state
   def genWHNFs: WHNFs.Type = {
     val wire = Wire(WHNFs())
-    when(threadStacks.exists(stk => findMoreDmder(currentStk.top.addr, stk))) {
+    when(threadStacks.exists(stk => findMoreDmder(regAddr, stk))) {
       wire := WHNFs.MoreDmders
     }.otherwise {
-      when(threadStacks.exists(stk => findNewFrame(currentStk.top.addr, stk))) {
+      when(threadStacks.exists(stk => findNewFrame(regAddr, stk))) {
         wire := WHNFs.NewFrame
       }.otherwise {
         wire := WHNFs.NoNewFrame
@@ -402,8 +402,8 @@ class DrfHeap extends Module {
       .reduce(_ || _)
     val local_stk: Bool =
       genIAs1 === IAs1.ExistWHNF || genIAs1 === IAs1.ExistIAWorkingNewFrame
-    val more_strict_args: Bool = !regInMain.app(0).isPtr() ||
-      (regInMain.app(0).isPrm() && regArgId === 1.U && regInMain.app(2).isPtr())
+    val more_strict_args: Bool =
+      regInMain.app(0).isPrm() && regArgId === 1.U && regInMain.app(2).isPtr()
 
     val wire = Wire(IAs2())
     when(more_strict_args && local_stk) {
@@ -514,12 +514,11 @@ class DrfHeap extends Module {
       is(WHNFs.MoreDmders) {
         bBorrowed := needSplit
         findPopRead(findMoreDmder(regAddr, _), false)
-        port    := true.B
-        stmMain := Stm.WHNF
+        port := true.B
       }
       is(WHNFs.NewFrame) {
         bBorrowed := needSplit
-        findPopRead(findMoreDmder(regAddr, _), true)
+        findPopRead(findNewFrame(regAddr, _), true)
         port    := true.B
         stmMain := Stm.RESUME
       }
