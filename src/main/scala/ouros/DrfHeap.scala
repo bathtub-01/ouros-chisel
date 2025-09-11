@@ -138,6 +138,7 @@ class DrfHeap extends Module {
   val regBusy       = RegInit(false.B)
   val regAddrBumper = RegInit(0.U.asTypeOf(Addr))
   val regArgId      = RegInit(0.U(3.W)) // hardcode this should be fine
+  val regSubMask    = RegInit(false.B)
   val needSplit     = WireInit(false.B)
   val bBorrowed     = WireInit(false.B)
 
@@ -222,8 +223,7 @@ class DrfHeap extends Module {
     val sensitive2 = genIAs1 === IAs1.ExistIAFresh ||
       genIAs1 === IAs1.NoExist
     val same1 = incomingStk.top.addr === regAddr
-    val same2 =
-      currentStk.elms >= 1.U && currentStk.top.addr === incomingStk.top.addr
+    val same2 = currentStk.top.addr === incomingStk.top.addr
     (sensitive1 && same1) || (sensitive2 && same2)
   }
 
@@ -276,8 +276,8 @@ class DrfHeap extends Module {
     io.out_sub.bits  := mkActiveApp(dmd, app)
   }
 
-  def writeBack(port: Boolean): Unit = {
-    if (!port) {
+  def writeBack(useB: Boolean): Unit = {
+    if (!useB) {
       mainHeap.writeA(mkHeapCell(true.B, regInMain.app), regAddr)
     } else {
       mainHeap.writeB(mkHeapCell(true.B, regInMain.app), regAddr)
@@ -324,13 +324,13 @@ class DrfHeap extends Module {
     }.otherwise {
       when(isWHNF(io.in_main.bits.app)) {
         when(
-          threadStacks.exists(stk =>
-            findMoreDmder(threadStacks(io.in_main.bits.stack_idx).top.addr, stk)
+          threadStacks.exists(
+            findMoreDmder(threadStacks(io.in_main.bits.stack_idx).top.addr, _)
           )
         ) {
           wire := CONSUMEs.InputWHNFWithDmder
         }.otherwise {
-          when(currentStk.elms > 1.U) {
+          when(incomingStk.elms > 1.U) {
             wire := CONSUMEs.InputWHNFNoDmderNewFrame
           }.otherwise {
             wire := CONSUMEs.InputWHNFNoDmderNoFrame
@@ -346,10 +346,10 @@ class DrfHeap extends Module {
   // generate the WHNFs signal under current state
   def genWHNFs: WHNFs.Type = {
     val wire = Wire(WHNFs())
-    when(threadStacks.exists(stk => findMoreDmder(regAddr, stk))) {
+    when(threadStacks.exists(findMoreDmder(regAddr, _))) {
       wire := WHNFs.MoreDmders
     }.otherwise {
-      when(threadStacks.exists(stk => findNewFrame(regAddr, stk))) {
+      when(threadStacks.exists(findNewFrame(regAddr, _))) {
         wire := WHNFs.NewFrame
       }.otherwise {
         wire := WHNFs.NoNewFrame
@@ -428,7 +428,7 @@ class DrfHeap extends Module {
   // generate the WORKs signal under current state
   def genWORKs: WORKs.Type = {
     val wire = Wire(WORKs())
-    when(demandHeap.readOutB) {
+    when(demandHeap.readOutB && !regSubMask) {
       when(
         threadStacks.exists(stk =>
           stk.elms >= 1.U && stk.top.addr === regInSub.heap_addr
@@ -446,7 +446,7 @@ class DrfHeap extends Module {
 
   // consume the next input
   def nextMain(): Unit = {
-    io.in_main.ready := io.out_main.ready
+    io.in_main.ready := true.B // io.out_main.ready
     regInMain        := io.in_main.bits
     switch(genCONSUMEs) {
       is(CONSUMEs.NoInput) {
@@ -492,10 +492,9 @@ class DrfHeap extends Module {
           // threadStacks.exists(s => s.elms >= 1.U && s.top.addr === addr)
           demandHeap.io.readwritePorts(0).enable
       ) {
-        demandHeap.readB(0.U)
-      }.otherwise {
-        demandHeap.readB(addr)
+        regSubMask := true.B
       }
+      demandHeap.readB(addr)
       stmSub := StmSub.WORK
     }.otherwise {
       stmSub := StmSub.IDLE
@@ -600,7 +599,7 @@ class DrfHeap extends Module {
         stepToNext()
       }
       is(IAs2.NoMoreArgsCanEmit) {
-        bBorrowed := genIAs1 === IAs1.ExistWHNF && needSplit
+        bBorrowed := needSplit
         cancelNewFrame()
         putOutputMain(regInMain.stack_idx, updated_dmder)
         stepToNext()
@@ -654,11 +653,11 @@ class DrfHeap extends Module {
   io.out_sub.bits   := DontCare
   io.free_addr      := regAddrBumper
   regAddrBumper     := regAddrBumper + io.addr_consumed + needSplit.asUInt
+  regSubMask        := false.B
 
   // program injection & start/end control
   when(!busy && io.inject.valid) {
     mainHeap.writeA(mkHeapCell(true.B, io.inject.bits), regAddrBumper)
-    workingHeap.writeA(false.B, regAddrBumper)
     regAddrBumper := regAddrBumper + 1.U
   }
 

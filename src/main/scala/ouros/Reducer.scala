@@ -153,9 +153,9 @@ class Reducer(pipelined: Boolean) extends Module {
     app3Reg.bits  := resApp3
     // set valid bit
     spineReg.valid := true.B
-    app1Reg.valid  := resApp1.app(0).asUInt =/= 0.U
-    app2Reg.valid  := resApp2.app(0).asUInt =/= 0.U
-    app3Reg.valid  := resApp3.app(0).asUInt =/= 0.U
+    app1Reg.valid  := !resApp1.app(0).isNop()
+    app2Reg.valid  := !resApp2.app(0).isNop()
+    app3Reg.valid  := !resApp3.app(0).isNop()
   }
 
   // free addr will be consumed immediatedly
@@ -163,7 +163,7 @@ class Reducer(pipelined: Boolean) extends Module {
     io.in.fire,
     VecInit(
       Seq(resApp1.app(0), resApp2.app(0), resApp3.app(0))
-    ).count(_.asUInt =/= 0.U),
+    ).count(!_.isNop()),
     0.U
   )
 
@@ -187,10 +187,11 @@ class Reducer(pipelined: Boolean) extends Module {
     io.out_app1.bits   := resApp1
     io.out_app2.bits   := resApp2
     io.out_app3.bits   := resApp3
-    io.out_spine.valid := io.in.valid
-    io.out_app1.valid  := resApp1.app(0).asUInt =/= 0.U
-    io.out_app2.valid  := resApp2.app(0).asUInt =/= 0.U
-    io.out_app3.valid  := resApp3.app(0).asUInt =/= 0.U
+    io.out_spine.valid := io.in.valid && io.out_app1.ready &&
+      io.out_app2.ready && io.out_app3.ready
+    io.out_app1.valid := Mux(io.in.fire, !resApp1.app(0).isNop(), false.B)
+    io.out_app2.valid := Mux(io.in.fire, !resApp2.app(0).isNop(), false.B)
+    io.out_app3.valid := Mux(io.in.fire, !resApp3.app(0).isNop(), false.B)
   }
 }
 

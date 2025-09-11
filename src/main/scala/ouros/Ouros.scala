@@ -48,8 +48,8 @@ class Ouros extends Module {
   }
 
   val dheap  = Module(new DrfHeap)
-  val reducr = Module(new Reducer(pipelined = true))
-  val alu    = Module(new Alu(pipelined = true))
+  val reducr = Module(new Reducer(pipelined = ReducerPipe))
+  val alu    = Module(new Alu(pipelined = AluPipe))
 
   val wireToDheapA0 = wireGen
   val wireToDheapA1 = wireGen

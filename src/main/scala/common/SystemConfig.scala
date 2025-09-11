@@ -55,11 +55,17 @@ object SystemConfig {
   val frameStkDepth = 64
 
   object BufferConfig {
-    val depth: Int       = maxThreads
-    val pipe: Boolean    = false
-    val flow: Boolean    = false
+    val depth: Int    = maxThreads + 1 // ensure we don't need to `pipe`
+    val pipe: Boolean = false          // `true` will give combinational cycle
+    val flow: Boolean = false
     val syncMem: Boolean = false
   }
+
+  /**
+   * whether the Reducer and ALU blocks are pipelined
+   */
+  val ReducerPipe: Boolean = false
+  val AluPipe: Boolean     = false
 
   val atomPayloadSize = atomSize - AtomType.getWidth
 }

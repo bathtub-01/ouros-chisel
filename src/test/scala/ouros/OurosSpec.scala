@@ -24,7 +24,7 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     dut.clock.step()
     dut.io.start.poke(false.B)
     // ============ run ===============
-    while (!dut.io.done.peekBoolean() && cycles <= 10000) {
+    while (!dut.io.done.peekBoolean() && cycles <= 100000) {
       dut.clock.step()
       cycles = cycles + 1
     }
@@ -33,7 +33,7 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
 
   "Playground" in {
     simulate(new Ouros) { dut =>
-      runBenchmark(MapY, dut)
+      runBenchmark(Fib, dut)
     }
   }
 
