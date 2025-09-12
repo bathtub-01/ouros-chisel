@@ -323,11 +323,7 @@ class DrfHeap extends Module {
       wire := CONSUMEs.NoInput
     }.otherwise {
       when(isWHNF(io.in_main.bits.app)) {
-        when(
-          threadStacks.exists(
-            findMoreDmder(threadStacks(io.in_main.bits.stack_idx).top.addr, _)
-          )
-        ) {
+        when(threadStacks.exists(findMoreDmder(incomingStk.top.addr, _))) {
           wire := CONSUMEs.InputWHNFWithDmder
         }.otherwise {
           when(incomingStk.elms > 1.U) {
@@ -470,6 +466,7 @@ class DrfHeap extends Module {
         stmMain := Stm.RESUME
       }
       is(CONSUMEs.InputWHNFNoDmderNoFrame) {
+        busy := false.B // FIXME!
         incomingFrmStk.pop()
         writeIncoming()
         stmMain := Stm.IDLE
@@ -558,11 +555,11 @@ class DrfHeap extends Module {
         pushTarget(false.B)
       }
       is(IAs1.ExistWHNF) {
-        val (dres1, dres2) = deref(dmder, regArgId, target, io.free_addr)
+        val (dres1, dres2) = deref(dmder, regArgId, target, freeAddrLocal)
         updated_dmder := dres1
         when(!dres2(0).isNop()) {
           needSplit := true.B
-          currentStk.push(mkStkCell(false.B, io.free_addr))
+          currentStk.push(mkStkCell(false.B, freeAddrLocal))
           writeBackBigDrf(dres2, true.B)
         }.otherwise {
           regInMain.app := updated_dmder
@@ -583,7 +580,7 @@ class DrfHeap extends Module {
         selectNextArgRead(updated_dmder)
         val frame_record = currentFrmStk.top
         val stk_idx      = WireInit(0.U(log2Ceil(maxThreads).W))
-        for (i <- maxThreads - 1 to 0 by -1) {
+        for (i <- maxThreads - 1 to 0 by -1) { // IMPROVE ME
           when(findFreeStk(frame_record(i), threadStacks(i))) {
             stk_idx := i.U
           }

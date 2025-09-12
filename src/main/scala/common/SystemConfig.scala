@@ -64,8 +64,8 @@ object SystemConfig {
   /**
    * whether the Reducer and ALU blocks are pipelined
    */
-  val ReducerPipe: Boolean = false
-  val AluPipe: Boolean     = false
+  val ReducerPipe: Boolean = true
+  val AluPipe: Boolean     = true
 
   val atomPayloadSize = atomSize - AtomType.getWidth
 }

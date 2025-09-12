@@ -9,7 +9,7 @@ import benchmarks._
 import ouros._
 
 class OurosSpec extends AnyFreeSpec with ChiselSim {
-  def runBenchmark(benchmark: Benchmark, dut: Ouros): Unit = {
+  def runBenchmark(benchmark: Benchmark, dut: Ouros): Int = {
     var cycles: Int = 0
     dut.clock.step(3)
     // ====== program injection =======
@@ -24,20 +24,41 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     dut.clock.step()
     dut.io.start.poke(false.B)
     // ============ run ===============
-    while (!dut.io.done.peekBoolean() && cycles <= 100000) {
+    while (!dut.io.done.peekBoolean() && cycles <= 3_000_00) {
       dut.clock.step()
       cycles = cycles + 1
     }
-    println(s"Cycles consumes: ${cycles}")
+    println(s"${benchmark.toString()}: ${cycles} cycles")
+    cycles
   }
 
-  "Playground" in {
+  def inspect() = "Playground" in {
     simulate(new Ouros) { dut =>
-      runBenchmark(Fib, dut)
+      runBenchmark(Whilex, dut)
     }
   }
 
-  // for (i <- 0 until 3) {
-  //   s"x${i}" in {}
-  // }
+  def fullBenchmarks() = "Benchmarks" in {
+    Seq(
+      Adjoxo,
+      Braun,
+      Clausify,
+      Countdown,
+      Fib,
+      Mss,
+      Ordlist,
+      Permsort,
+      Queens,
+      Queens2,
+      Sumpuz,
+      Taut,
+      Whilex
+    ).map { b =>
+      var cycles: Int = 0
+      simulate(new Ouros) { dut => cycles = runBenchmark(b, dut) }
+      (b.toString, cycles)
+    }.foreach { case (name, cycles) => println(s"${name}: ${cycles} consumed") }
+  }
+
+  inspect()
 }
