@@ -37,7 +37,7 @@ object SystemConfig {
   /**
    * cells in the heap
    */
-  val heapSize = 256 * 1024 // 2 * 1024
+  val heapSize = 2 * 1024 // 256 * 1024
 
   /**
    * thread resource in a core (number of stacks)
@@ -47,25 +47,18 @@ object SystemConfig {
   /**
    * depth of the thread stack in DrfHeap
    */
-  val threadStkDepth = 512 // 256
+  val threadStkDepth = 256 // 512
 
   /**
    * depth of the frame stack in DrfHeap
    */
   val frameStkDepth = 64
 
-  object BufferConfig {
-    val depth: Int    = maxThreads + 1 // ensure we don't need to `pipe`
-    val pipe: Boolean = false          // `true` will give combinational cycle
-    val flow: Boolean = false
-    val syncMem: Boolean = false
-  }
-
   /**
    * whether the Reducer and ALU blocks are pipelined
    */
-  val ReducerPipe: Boolean = true
-  val AluPipe: Boolean     = true
+  val ReducerPipe: Boolean = false
+  val AluPipe: Boolean     = false
 
   val atomPayloadSize = atomSize - AtomType.getWidth
 }

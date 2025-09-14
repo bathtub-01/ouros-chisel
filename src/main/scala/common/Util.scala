@@ -55,11 +55,51 @@ object Helper {
   }
 
   /**
+   * A tree version of "applying a predicate to a Vec". Can be used for .any or
+   * .indexWhere. Gives shorter logical depth than a linear chain.
+   *
+   * For simplicity, only accept Vec with even number length.
+   */
+  def treePred[T <: Data](v: Vec[T])(p: T => Bool): (Bool, UInt) = {
+    require(isPow2(v.length))
+    def tri(a: (Bool, UInt), b: (Bool, UInt)): (Bool, UInt) = {
+      val res1 = Wire(Bool())
+      val res2 = Wire(UInt(log2Ceil(v.length + 1).W))
+      when(a._1) {
+        res1 := true.B
+        res2 := a._2
+      }.otherwise {
+        res1 := b._1
+        res2 := b._2
+      }
+      (res1, res2)
+    }
+    def buildTree(s: Seq[(Bool, UInt)]): Seq[(Bool, UInt)] = {
+      if (s.length <= 1) { s }
+      else {
+        buildTree(s.grouped(2).map { case Seq(l, r) => tri(l, r) }.toSeq)
+      }
+    }
+
+    val tree = buildTree(v.zipWithIndex.map { case (t, i) => (p(t), i.U) }).head
+    tri(tree, (false.B, v.length.U))
+  }
+
+  def anyThat[T <: Data](v: Vec[T])(p: T => Bool): Bool = treePred(v)(p)._1
+
+  /**
    * Similar to `Vec.indexWhere`, but returns the length of the Vec when the
    * predicate fails for all elements (For `Vec.indexWhere`, it returns the idx
    * of the last element when all failed).
+   *
+   * Require input size to be pow2.
    */
-  def firstWhere[T <: Data](v: Vec[T])(p: T => Bool): UInt = {
+  def firstWhere[T <: Data](v: Vec[T])(p: T => Bool): UInt = treePred(v)(p)._2
+
+  /**
+   * Similar to `firstWhere`, but uses a chain.
+   */
+  def firstWhereC[T <: Data](v: Vec[T])(p: T => Bool): UInt = {
     val res = Wire(UInt(log2Ceil(v.length + 1).W))
     res := v.length.U
     for (i <- v.length - 1 to 0 by -1) {
@@ -75,8 +115,7 @@ object Helper {
    * @example
    *   appLen([+, 1, 2, NOP]) = 3
    */
-  def appLen(app: Vec[Atom]): UInt =
-    Helper.firstWhere(app) { _.isNop() }
+  def appLen(app: Vec[Atom]): UInt = Helper.firstWhere(app) { _.isNop() }
 
   /**
    * The arity of an Atom.

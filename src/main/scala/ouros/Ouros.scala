@@ -39,7 +39,12 @@ class Ouros extends Module {
     wire
   }
 
-  def wireGen = WireInit(0.U.asTypeOf(new DecoupledIO(new ActiveApp)))
+  def wireGen = {
+    val wire = Wire(new DecoupledIO(new ActiveApp))
+    wire       := DontCare
+    wire.valid := false.B
+    wire
+  }
   def exFrozen(fa: FrozenApp): FrozenApp = {
     val res = Wire(new FrozenApp(comIdxs - 1))
     res.heap_addr := fa.heap_addr
@@ -101,27 +106,26 @@ class Ouros extends Module {
       .otherwise { wireToReducr2 :<>= alu.io.out }
   }
 
-  import BufferConfig._
-  val bufferDheapA0 = Queue(wireToDheapA0, depth, pipe, flow, syncMem)
-  val bufferDheapA1 = Queue(wireToDheapA1, depth, pipe, flow, syncMem)
-  val bufferDheapA2 = Queue(wireToDheapA2, depth, pipe, flow, syncMem)
-  val bufferDheapA3 = Queue(wireToDheapA3, depth, pipe, flow, syncMem)
+  val bufferDheapA0 = Queue(wireToDheapA0, maxThreads + 1) // from dheap.main
+  val bufferDheapA1 = Queue(wireToDheapA1, maxThreads + 1) // from reducer
+  val bufferDheapA2 = Queue(wireToDheapA2, maxThreads + 1) // from alu
+  val bufferDheapA3 = Queue(wireToDheapA3, maxThreads + 1) // from dheap.sub
   val arbiterDheapA = Module(new RRArbiter(new ActiveApp, 4, true))
 
-  val bufferDheapB0 = Queue(reducr.io.out_app1, depth, pipe, flow, syncMem)
-  val bufferDheapB1 = Queue(reducr.io.out_app2, depth, pipe, flow, syncMem)
-  val bufferDheapB2 = Queue(reducr.io.out_app3, depth, pipe, flow, syncMem)
+  val bufferDheapB0 = Queue(reducr.io.out_app1, maxThreads + 1)
+  val bufferDheapB1 = Queue(reducr.io.out_app2, maxThreads + 1)
+  val bufferDheapB2 = Queue(reducr.io.out_app3, maxThreads + 1)
   val arbiterDheapB = Module(new RRArbiter(new FrozenApp(comIdxs - 1), 3, true))
 
-  val bufferReducr0 = Queue(wireToReducr0, depth, pipe, flow, syncMem)
-  val bufferReducr1 = Queue(wireToReducr1, depth, pipe, flow, syncMem)
-  val bufferReducr2 = Queue(wireToReducr2, depth, pipe, flow, syncMem)
-  val bufferReducr3 = Queue(wireToReducr3, depth, pipe, flow, syncMem)
+  val bufferReducr0 = Queue(wireToReducr0, maxThreads + 1) // from reducer
+  val bufferReducr1 = Queue(wireToReducr1, maxThreads + 1) // from dheap.main
+  val bufferReducr2 = Queue(wireToReducr2, maxThreads + 1) // from alu
+  val bufferReducr3 = Queue(wireToReducr3, maxThreads + 1) // from dheap.sub
   val arbiterReducr = Module(new RRArbiter(new ActiveApp, 4, true))
 
-  val bufferAlu0 = Queue(wireToAlu0, depth, pipe, flow, syncMem)
-  val bufferAlu1 = Queue(wireToAlu1, depth, pipe, flow, syncMem)
-  val bufferAlu2 = Queue(wireToAlu2, depth, pipe, flow, syncMem)
+  val bufferAlu0 = Queue(wireToAlu0, maxThreads + 1) // from reducer
+  val bufferAlu1 = Queue(wireToAlu1, maxThreads + 1) // from dheap.main
+  val bufferAlu2 = Queue(wireToAlu2, maxThreads + 1) // from dheap.sub
   val arbiterAlu = Module(new RRArbiter(new ActiveApp, 3, true))
 
   // buffers -> arbiters

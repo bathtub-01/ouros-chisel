@@ -466,7 +466,6 @@ class DrfHeap extends Module {
         stmMain := Stm.RESUME
       }
       is(CONSUMEs.InputWHNFNoDmderNoFrame) {
-        busy := false.B // FIXME!
         incomingFrmStk.pop()
         writeIncoming()
         stmMain := Stm.IDLE

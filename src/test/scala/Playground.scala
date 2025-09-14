@@ -6,6 +6,24 @@ import _root_.circt.stage.ChiselStage
 import common._
 import common.Helper._
 
+class AnyThat extends Module {
+  val io = IO(new Bundle {
+    val in  = Input(Vec(8, new Atom))
+    val oub = Output(Bool())
+    val out = Output(UInt(4.W))
+  })
+  io.oub := treePred(io.in)(_.isNop())._1
+  io.out := treePred(io.in)(_.isNop())._2
+}
+
+class IndexWhere extends Module {
+  val io = IO(new Bundle {
+    val in  = Input(Vec(8, new Atom))
+    val out = Output(UInt(4.W))
+  })
+  io.out := appLen(io.in)
+}
+
 class Deref extends Module {
   val io = IO(new Bundle {
     val app    = Input(Vec(8, new Atom))
@@ -19,9 +37,9 @@ class Deref extends Module {
   io.res2 := res2
 }
 
-object Deref extends App {
+object Make extends App {
   ChiselStage.emitSystemVerilogFile(
-    new Deref,
+    new AnyThat,
     Array("--target-dir", "sv-gen"),
     firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info")
   )

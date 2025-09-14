@@ -10,7 +10,7 @@ import ouros._
 
 class OurosSpec extends AnyFreeSpec with ChiselSim {
   def runBenchmark(benchmark: Benchmark, dut: Ouros): Int = {
-    var cycles: Int = 0
+    var cycles: Int = -1 // one cycle for loading `main`
     dut.clock.step(3)
     // ====== program injection =======
     dut.io.inject.valid.poke(true.B)
@@ -24,7 +24,7 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     dut.clock.step()
     dut.io.start.poke(false.B)
     // ============ run ===============
-    while (!dut.io.done.peekBoolean() && cycles <= 3_000_00) {
+    while (!dut.io.done.peekBoolean() && cycles <= 1_000_000) {
       dut.clock.step()
       cycles = cycles + 1
     }
@@ -33,9 +33,7 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
   }
 
   def inspect() = "Playground" in {
-    simulate(new Ouros) { dut =>
-      runBenchmark(Whilex, dut)
-    }
+    simulate(new Ouros) { dut => runBenchmark(Fib, dut) }
   }
 
   def fullBenchmarks() = "Benchmarks" in {
@@ -60,5 +58,6 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     }.foreach { case (name, cycles) => println(s"${name}: ${cycles} consumed") }
   }
 
-  inspect()
+  // inspect()
+  fullBenchmarks()
 }
