@@ -485,7 +485,6 @@ class DrfHeap extends Module {
       regInSub := io.in_sub.bits
       when(
         demandHeap.io.readwritePorts(0).address === addr &&
-          // threadStacks.exists(s => s.elms >= 1.U && s.top.addr === addr)
           demandHeap.io.readwritePorts(0).enable
       ) {
         regSubMask := true.B
@@ -520,7 +519,7 @@ class DrfHeap extends Module {
       is(WHNFs.NoNewFrame) {
         bBorrowed := true.B
         val stkId: UInt =
-          firstWhere(threadStacks) { s =>
+          firstWhereC(threadStacks) { s =>
             s.elms >= 1.U && s.top.addr === regAddr
           }
         when(stkId =/= maxThreads.U) {

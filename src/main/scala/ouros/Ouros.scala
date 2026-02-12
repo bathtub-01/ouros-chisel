@@ -110,23 +110,23 @@ class Ouros extends Module {
   val bufferDheapA1 = Queue(wireToDheapA1, maxThreads + 1) // from reducer
   val bufferDheapA2 = Queue(wireToDheapA2, maxThreads + 1) // from alu
   val bufferDheapA3 = Queue(wireToDheapA3, maxThreads + 1) // from dheap.sub
-  val arbiterDheapA = Module(new RRArbiter(new ActiveApp, 4, true))
+  val arbiterDheapA = Module(new Arbiter(new ActiveApp, 4))
 
-  val bufferDheapB0 = Queue(reducr.io.out_app1, maxThreads + 1)
-  val bufferDheapB1 = Queue(reducr.io.out_app2, maxThreads + 1)
-  val bufferDheapB2 = Queue(reducr.io.out_app3, maxThreads + 1)
-  val arbiterDheapB = Module(new RRArbiter(new FrozenApp(comIdxs - 1), 3, true))
+  val bufferDheapB0 = Queue(reducr.io.out_app1, maxThreads + 1, pipe = true)
+  val bufferDheapB1 = Queue(reducr.io.out_app2, maxThreads + 1, pipe = true)
+  val bufferDheapB2 = Queue(reducr.io.out_app3, maxThreads + 1, pipe = true)
+  val arbiterDheapB = Module(new Arbiter(new FrozenApp(comIdxs - 1), 3))
 
   val bufferReducr0 = Queue(wireToReducr0, maxThreads + 1) // from reducer
   val bufferReducr1 = Queue(wireToReducr1, maxThreads + 1) // from dheap.main
   val bufferReducr2 = Queue(wireToReducr2, maxThreads + 1) // from alu
   val bufferReducr3 = Queue(wireToReducr3, maxThreads + 1) // from dheap.sub
-  val arbiterReducr = Module(new RRArbiter(new ActiveApp, 4, true))
+  val arbiterReducr = Module(new Arbiter(new ActiveApp, 4))
 
   val bufferAlu0 = Queue(wireToAlu0, maxThreads + 1) // from reducer
   val bufferAlu1 = Queue(wireToAlu1, maxThreads + 1) // from dheap.main
   val bufferAlu2 = Queue(wireToAlu2, maxThreads + 1) // from dheap.sub
-  val arbiterAlu = Module(new RRArbiter(new ActiveApp, 3, true))
+  val arbiterAlu = Module(new Arbiter(new ActiveApp, 3))
 
   // buffers -> arbiters
   arbiterDheapA.io.in

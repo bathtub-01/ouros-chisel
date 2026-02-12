@@ -32,32 +32,45 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     cycles
   }
 
-  def inspect() = "Playground" in {
-    simulate(new Ouros) { dut => runBenchmark(Fib, dut) }
+  def inspect(p: Benchmark) = "Playground" in {
+    simulate(new Ouros) { dut => runBenchmark(p, dut) }
   }
 
-  def fullBenchmarks() = "Benchmarks" in {
-    Seq(
-      Adjoxo,
-      Braun,
-      Clausify,
-      Countdown,
-      Fib,
-      Mss,
-      Ordlist,
-      Permsort,
-      Queens,
-      Queens2,
-      Sumpuz,
-      Taut,
-      Whilex
-    ).map { b =>
+  def runBench(bs: Seq[Benchmark]) = bs
+    .map { b =>
       var cycles: Int = 0
       simulate(new Ouros) { dut => cycles = runBenchmark(b, dut) }
       (b.toString, cycles)
-    }.foreach { case (name, cycles) => println(s"${name}: ${cycles} consumed") }
+    }
+    .foreach { case (name, cycles) => println(s"${name}: ${cycles} consumed") }
+
+  def quickBenchmarks() = "Quick Benchmarks" in {
+    runBench(Seq(BoolAnd, BoolNest, AluOp, MapY))
   }
 
-  // inspect()
+  def fullBenchmarks() = "Benchmarks" in {
+    runBench(
+      Seq(
+        Adjoxo,
+        Braun,
+        Clausify,
+        Countdown,
+        Fib,
+        Mss,
+        Ordlist,
+        Permsort,
+        Queens,
+        Queens2,
+        Sumpuz,
+        Taut,
+        Whilex,
+        SumEuler,
+        TreeSum
+      )
+    )
+  }
+
+  // inspect(Mss)
+  // quickBenchmarks()
   fullBenchmarks()
 }

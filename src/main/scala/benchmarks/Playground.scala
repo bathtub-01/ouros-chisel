@@ -5,6 +5,7 @@ import common.Atom
 
 object BoolAnd extends Benchmark {
   val combinatorCount: Int = 0
+  override def toString(): String = "BoolAnd"
   val prog: Seq[Vec[Atom]] = Seq(
     appBuilder(
       ptrBuilder(1),
@@ -20,6 +21,7 @@ object BoolAnd extends Benchmark {
 
 object BoolNest extends Benchmark {
   val combinatorCount: Int = 0
+  override def toString(): String = "BoolNest"
   val prog: Seq[Vec[Atom]] = Seq(
     appBuilder(
       ptrBuilder(4),
@@ -50,6 +52,7 @@ object BoolNest extends Benchmark {
 
 object AluOp extends Benchmark {
   val combinatorCount: Int = 0
+  override def toString(): String = "AluOp"
   val prog: Seq[Vec[Atom]] = Seq(
     appBuilder(
       prmBuilder("=="),

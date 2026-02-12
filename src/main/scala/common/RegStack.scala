@@ -45,6 +45,35 @@ class StackPort[T <: Data](depth: Int, t: T) extends Bundle {
   }
 }
 
+/**
+ * A different version of RegStack, using LUTRAMs (register banks) instead of
+ * BRAMs. Should be faster, but size is more limited.
+ */
+class RegStackLut[T <: Data](depth: Int, t: T) extends Module {
+  val io       = IO(new StackPort(depth, t))
+  val stkPtr   = RegInit(0.U(log2Ceil(depth).W))
+  val stkMem   = Mem(depth, t)
+  val elmCount = RegInit(0.U(log2Ceil(depth + 1).W))
+  io.elms := elmCount
+  io.top  := stkMem(stkPtr - 1.U)
+  io.snd  := stkMem(stkPtr - 2.U)
+  switch(io.opcode) {
+    is(StackOpCode.idle) {}
+    is(StackOpCode.push) {
+      stkMem(stkPtr) := io.din
+      stkPtr         := stkPtr + 1.U
+      elmCount       := elmCount + 1.U
+    }
+    is(StackOpCode.pop) {
+      stkPtr   := stkPtr - 1.U
+      elmCount := elmCount - 1.U
+    }
+    is(StackOpCode.modify) {
+      stkMem(stkPtr) := io.din
+    }
+  }
+}
+
 class RegStack[T <: Data](depth: Int, t: T) extends Module {
   val io         = IO(new StackPort(depth, t))
   val stkPtr     = RegInit(0.U(log2Ceil(depth).W))
