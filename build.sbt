@@ -12,6 +12,7 @@ lazy val root = (project in file("."))
     libraryDependencies ++= Seq(
       "org.chipsalliance" %% "chisel" % chiselVersion,
       "org.scalatest" %% "scalatest" % "3.2.19" % "test",
+      "me.tongfei" % "progressbar" % "0.10.1",
     ),
     scalacOptions ++= Seq(
       "-language:reflectiveCalls",
@@ -23,5 +24,3 @@ lazy val root = (project in file("."))
     addCompilerPlugin("org.chipsalliance" % "chisel-plugin" % chiselVersion cross CrossVersion.full),
   )
 
-libraryDependencies += "me.tongfei" % "progressbar" % "0.10.1"
-logLevel := Level.Error
