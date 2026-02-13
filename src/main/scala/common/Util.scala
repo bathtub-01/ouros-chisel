@@ -142,9 +142,11 @@ object Helper {
 
   /**
    * Determine whether an Application is in Weak-Head-Normal-Form.
+   * arityOf(app(0)) >= appLen(app)
    */
   def isWHNF(app: Vec[Atom]): Bool =
-    Helper.arityOf(app(0)) >= Helper.appLen(app)
+    // this is much simpler in hw
+    app(Helper.arityOf(app(0))).isNop()
 
   /**
    * Takes a sequence of Atoms, convert it into a full-sized Application.
