@@ -1,3 +1,5 @@
+// TODO remove this file, use main/scala/Main.scala instead
+
 package ouros
 
 import chisel3._
@@ -36,7 +38,7 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     simulate(new Ouros) { dut => runBenchmark(p, dut) }
   }
 
-  def runBench(bs: Seq[Benchmark]) = bs
+  def runBench(bs: List[Benchmark]) = bs
     .map { b =>
       var cycles: Int = 0
       simulate(new Ouros) { dut => cycles = runBenchmark(b, dut) }
@@ -45,12 +47,12 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     .foreach { case (name, cycles) => println(s"${name}: ${cycles} consumed") }
 
   def quickBenchmarks() = "Quick Benchmarks" in {
-    runBench(Seq(BoolAnd, BoolNest, AluOp, MapY))
+    runBench(List(BoolAnd, BoolNest, AluOp, MapY))
   }
 
   def fullBenchmarks() = "Benchmarks" in {
     runBench(
-      Seq(
+      List(
         Adjoxo,
         Braun,
         Clausify,

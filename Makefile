@@ -18,7 +18,7 @@ test-vcd:
 		echo "Example: make test-vcd gcd.GCDSpec"; \
 		exit 1; \
 	fi
-	sbt --mem 8000 'testOnly $(filter-out test-vcd,$(MAKECMDGOALS)) -- -DemitVcd=1 -DfirtoolOpts=-disable-all-randomization'
+	sbt --mem 16000 'testOnly $(filter-out test-vcd,$(MAKECMDGOALS)) -- -DemitVcd=1 -DfirtoolOpts=-disable-all-randomization'
 	
 test:
 	@if [ "$(filter-out test,$(MAKECMDGOALS))" = "" ]; then \
@@ -27,7 +27,7 @@ test:
 		echo "Example: make test gcd.GCDSpec"; \
 		exit 1; \
 	fi
-	sbt --mem 8000 'testOnly $(filter-out test,$(MAKECMDGOALS)) -- -DfirtoolOpts=-disable-all-randomization'
+	sbt --mem 16000 'testOnly $(filter-out test,$(MAKECMDGOALS)) -- -DfirtoolOpts=-disable-all-randomization "-DchiselOpts=--warn-conf any:s"'
 
 # Run target that takes the main class as an argument
 run:
@@ -37,7 +37,7 @@ run:
 		echo "Example: make run gcd.GCD"; \
 		exit 1; \
 	fi
-	sbt --mem 8000 'runMain $(filter-out run,$(MAKECMDGOALS))'
+	sbt --mem 16000 'runMain $(filter-out run,$(MAKECMDGOALS))'
 
 # This prevents make from treating the test class name as a target
 %:

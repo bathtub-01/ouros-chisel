@@ -22,3 +22,6 @@ lazy val root = (project in file("."))
     ),
     addCompilerPlugin("org.chipsalliance" % "chisel-plugin" % chiselVersion cross CrossVersion.full),
   )
+
+libraryDependencies += "me.tongfei" % "progressbar" % "0.10.1"
+logLevel := Level.Error
