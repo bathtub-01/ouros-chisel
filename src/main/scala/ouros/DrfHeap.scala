@@ -508,11 +508,9 @@ class DrfHeap extends Module {
 
     switch(genWHNFs) {
       is(WHNFs.MoreDmders) {
-        bBorrowed := needSplit
         findPopRead(findMoreDmder(regAddr, _), false)
       }
       is(WHNFs.NewFrame) {
-        bBorrowed := needSplit
         findPopRead(findNewFrame(regAddr, _), true)
         stmMain := Stm.RESUME
       }
@@ -589,7 +587,6 @@ class DrfHeap extends Module {
         stepToNext()
       }
       is(IAs2.NoMoreArgsCanEmit) {
-        bBorrowed := needSplit
         cancelNewFrame()
         putOutputMain(regInMain.stack_idx, updated_dmder)
         stepToNext()
