@@ -109,6 +109,7 @@ class DrfHeap extends Module {
     val out_big_drf   = Decoupled(new FrozenApp(8))
     val free_addr     = Output(Addr)
     val addr_consumed = Input(UInt(2.W))
+    val search        = Output(Addr)
     // ============ non-essential ports ===================
     val inject = Flipped(Valid(Vec(maxAppLen, new Atom)))
     val start  = Input(Bool())
@@ -245,12 +246,14 @@ class DrfHeap extends Module {
 
   def select1stArgRead(app: Vec[Atom]): Unit = {
     val (arg_id, ptr) = select1stArg(app)
+    io.search := ptr
     readTarget(ptr)
     regArgId := arg_id
   }
 
   def selectNextArgRead(app: Vec[Atom]): Unit = {
     val (arg_id, ptr) = selectNextArg(app)
+    io.search := ptr
     readTarget(ptr)
     regArgId := arg_id
   }
@@ -641,6 +644,7 @@ class DrfHeap extends Module {
   io.out_big_drf.valid := needSplit
   io.out_big_drf.bits  := DontCare
   io.free_addr         := regAddrBumper
+  io.search            := DontCare
   regAddrBumper        := regAddrBumper + io.addr_consumed + needSplit.asUInt
   regSubMask           := false.B
 
