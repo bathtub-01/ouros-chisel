@@ -46,9 +46,9 @@ class Ouros extends Module {
     wire
   }
   def exFrozen(fa: FrozenApp): FrozenApp = {
-    val res = Wire(new FrozenApp(comIdxs - 1))
+    val res = Wire(new FrozenApp(8))
     res.heap_addr := fa.heap_addr
-    res.app       := extendToApp(fa.app, comIdxs - 1)
+    res.app       := extendToApp(fa.app, 8)
     res
   }
 
@@ -112,10 +112,11 @@ class Ouros extends Module {
   val bufferDheapA3 = Queue(wireToDheapA3, maxThreads + 1) // from dheap.sub
   val arbiterDheapA = Module(new Arbiter(new ActiveApp, 4))
 
-  val bufferDheapB0 = Queue(reducr.io.out_app1, maxThreads + 1, pipe = true)
-  val bufferDheapB1 = Queue(reducr.io.out_app2, maxThreads + 1, pipe = true)
-  val bufferDheapB2 = Queue(reducr.io.out_app3, maxThreads + 1, pipe = true)
-  val arbiterDheapB = Module(new Arbiter(new FrozenApp(comIdxs - 1), 3))
+  val bufferDheapB0 = Queue(reducr.io.out_app1, maxThreads + 1)
+  val bufferDheapB1 = Queue(reducr.io.out_app2, maxThreads + 1)
+  val bufferDheapB2 = Queue(reducr.io.out_app3, maxThreads + 1)
+  val bufferDheapB3 = Queue(dheap.io.out_big_drf, maxThreads + 1)
+  val arbiterDheapB = Module(new Arbiter(new FrozenApp(8), 4))
 
   val bufferReducr0 = Queue(wireToReducr0, maxThreads + 1) // from reducer
   val bufferReducr1 = Queue(wireToReducr1, maxThreads + 1) // from dheap.main
@@ -138,9 +139,10 @@ class Ouros extends Module {
   arbiterDheapB.io.in
     .zip(
       Seq(
-        bufferDheapB0,
+        bufferDheapB0.map(exFrozen(_)),
         bufferDheapB1.map(exFrozen(_)),
-        bufferDheapB2.map(exFrozen((_)))
+        bufferDheapB2.map(exFrozen((_))),
+        bufferDheapB3
       )
     )
     .foreach { case (a, b) => a :<>= b }

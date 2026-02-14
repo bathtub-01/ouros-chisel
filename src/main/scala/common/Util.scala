@@ -17,9 +17,9 @@ object Helper {
 
   /**
    * Dereference `app`'s PTR at position `arg_id`, with `target`
-   *   - when returning `(app, None)`, `app` is the deref result
-   *   - when returning `(app1, Some(app2))`, `app1` is the new cell to be
-   *     emitted, `app2` need to be written back
+   *   - when returning `(app, _, false.B)`, `app` is the deref result
+   *   - when returning `(app1, app2, true.B)`, `app1` is the new cell to be
+   *     emitted, `app2` goes to port b
    *
    * Optimisation: In reality, when arg_id > 0, the target is always a singleton
    */
@@ -28,7 +28,7 @@ object Helper {
       arg_id: UInt,
       target: Vec[Atom],
       free_addr: UInt
-  ): (Vec[Atom], Vec[Atom]) = {
+  ): (Vec[Atom], Vec[Atom], Bool) = {
     val targetLen = appLen(target)
     val res       = WireInit(0.U.asTypeOf(Vec(2 * maxAppLen - 1, new Atom)))
     when(arg_id === 0.U) {
@@ -45,13 +45,18 @@ object Helper {
     }
     val res1 = Wire(Vec(maxAppLen, new Atom))
     val res2 = Wire(Vec(maxAppLen, new Atom))
-    res1 := res.slice(0, maxAppLen)
+    val resB = Wire(Bool())
+
     when(res(maxAppLen).isNop()) {
-      res2 := 0.U.asTypeOf(res2)
+      res1 := res.slice(0, maxAppLen)
+      res2 := DontCare
+      resB := false.B
     }.otherwise {
-      res2 := makePtr(true.B, free_addr) +: res.slice(maxAppLen, res.length)
+      res1 := makePtr(true.B, free_addr) +: res.slice(maxAppLen, res.length)
+      res2 := res.slice(0, maxAppLen)
+      resB := true.B
     }
-    (res1, res2)
+    (res1, res2, resB)
   }
 
   /**

@@ -103,9 +103,10 @@ class StkCell extends Bundle {
 class DrfHeap extends Module {
   val io = IO(new Bundle {
     val in_main       = Flipped(Decoupled(new ActiveApp))
-    val in_sub        = Flipped(Decoupled(new FrozenApp(comIdxs - 1)))
+    val in_sub        = Flipped(Decoupled(new FrozenApp(8)))
     val out_main      = Decoupled(new ActiveApp)
     val out_sub       = Decoupled(new ActiveApp)
+    val out_big_drf   = Decoupled(new FrozenApp(8))
     val free_addr     = Output(Addr)
     val addr_consumed = Input(UInt(2.W))
     // ============ non-essential ports ===================
@@ -118,7 +119,7 @@ class DrfHeap extends Module {
   val stmMain      = RegInit(Stm.IDLE)
   val stmSub       = RegInit(StmSub.IDLE)
   val regInMain    = RegInit(0.U.asTypeOf(new ActiveApp))
-  val regInSub     = RegInit(0.U.asTypeOf(new FrozenApp(comIdxs - 1)))
+  val regInSub     = RegInit(0.U.asTypeOf(new FrozenApp(8)))
   val regAddr      = RegInit(0.U.asTypeOf(Addr))
   val regIAddr     = RegInit(0.U.asTypeOf(Addr))
   val threadStacks = Wire(
@@ -442,7 +443,7 @@ class DrfHeap extends Module {
 
   // consume the next input
   def nextMain(): Unit = {
-    io.in_main.ready := true.B // io.out_main.ready
+    io.in_main.ready := true.B
     regInMain        := io.in_main.bits
     switch(genCONSUMEs) {
       is(CONSUMEs.NoInput) {
@@ -497,23 +498,22 @@ class DrfHeap extends Module {
   }
 
   def stepWHNF(): Unit = {
-    val dmder          = mainHeap.readOutA.app
-    val target         = regInMain.app
-    val (dres1, dres2) =
+    val dmder  = mainHeap.readOutA.app
+    val target = regInMain.app
+
+    val (dres1, dres2, is_big) =
       deref(dmder, select1stArg(dmder)._1, target, freeAddrLocal)
+
     putOutputMain(regInMain.stack_idx, dres1)
 
-    val port = WireInit(false.B) // false - A; true - B
     switch(genWHNFs) {
       is(WHNFs.MoreDmders) {
         bBorrowed := needSplit
         findPopRead(findMoreDmder(regAddr, _), false)
-        port := true.B
       }
       is(WHNFs.NewFrame) {
         bBorrowed := needSplit
         findPopRead(findNewFrame(regAddr, _), true)
-        port    := true.B
         stmMain := Stm.RESUME
       }
       is(WHNFs.NoNewFrame) {
@@ -527,19 +527,14 @@ class DrfHeap extends Module {
           frameStacks(stkId).pop()
         }
         writeBack(true) // avoid update here
-        port := false.B
-        when(dres2(0).isNop()) {
-          nextMain()
-        }.otherwise {
-          stmMain := Stm.IDLE
-        }
+        nextMain()
       }
     }
 
-    when(!dres2(0).isNop()) {
-      needSplit := true.B
-      currentStk.push(mkStkCell(false.B, freeAddrLocal))
-      writeBackBigDrf(dres2, port)
+    when(is_big) {
+      needSplit                     := true.B
+      io.out_big_drf.bits.heap_addr := freeAddrLocal
+      io.out_big_drf.bits.app       := dres2
     }
   }
 
@@ -553,14 +548,14 @@ class DrfHeap extends Module {
         pushTarget(false.B)
       }
       is(IAs1.ExistWHNF) {
-        val (dres1, dres2) = deref(dmder, regArgId, target, freeAddrLocal)
+        val (dres1, dres2, is_big) =
+          deref(dmder, regArgId, target, freeAddrLocal)
         updated_dmder := dres1
-        when(!dres2(0).isNop()) {
-          needSplit := true.B
-          currentStk.push(mkStkCell(false.B, freeAddrLocal))
-          writeBackBigDrf(dres2, true.B)
-        }.otherwise {
-          regInMain.app := updated_dmder
+        regInMain.app := updated_dmder
+        when(is_big) {
+          needSplit                     := true.B
+          io.out_big_drf.bits.heap_addr := freeAddrLocal
+          io.out_big_drf.bits.app       := dres2
         }
       }
       is(IAs1.ExistIAWorkingNormal) {
@@ -578,7 +573,7 @@ class DrfHeap extends Module {
         selectNextArgRead(updated_dmder)
         val frame_record = currentFrmStk.top
         val stk_idx      = WireInit(0.U(log2Ceil(maxThreads).W))
-        for (i <- maxThreads - 1 to 0 by -1) { // IMPROVE ME
+        for (i <- maxThreads - 1 to 0 by -1) { // TODO IMPROVE ME
           when(findFreeStk(frame_record(i), threadStacks(i))) {
             stk_idx := i.U
           }
@@ -640,15 +635,17 @@ class DrfHeap extends Module {
   mainHeap.init()
   demandHeap.init()
   workingHeap.init()
-  io.in_main.ready  := false.B
-  io.in_sub.ready   := false.B
-  io.out_main.valid := false.B
-  io.out_main.bits  := DontCare
-  io.out_sub.valid  := false.B
-  io.out_sub.bits   := DontCare
-  io.free_addr      := regAddrBumper
-  regAddrBumper     := regAddrBumper + io.addr_consumed + needSplit.asUInt
-  regSubMask        := false.B
+  io.in_main.ready     := false.B
+  io.in_sub.ready      := false.B
+  io.out_main.valid    := false.B
+  io.out_main.bits     := DontCare
+  io.out_sub.valid     := false.B
+  io.out_sub.bits      := DontCare
+  io.out_big_drf.valid := needSplit
+  io.out_big_drf.bits  := DontCare
+  io.free_addr         := regAddrBumper
+  regAddrBumper        := regAddrBumper + io.addr_consumed + needSplit.asUInt
+  regSubMask           := false.B
 
   // program injection & start/end control
   when(!busy && io.inject.valid) {
@@ -674,7 +671,7 @@ class DrfHeap extends Module {
     }
   }
 
-  // NOTICE: assume the output of DrfHeap is never blocked.
+  // NOTE assume the output of DrfHeap is never blocked.
   //   This is possible as long as the length of its output buffer
   //   is not smaller than maxThreads.
   when(busy) {
