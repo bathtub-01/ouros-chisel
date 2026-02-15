@@ -10,194 +10,83 @@ import common._
 import common.SystemConfig._
 import common.Helper._
 
-class DecodeRecord extends Bundle {
-  val valid  = Bool()
-  val isPtr  = Bool()
-  val ptrVal = UInt(3.W)
+object ReducerStm extends ChiselEnum {
+  val IDLE    = Value
+  val SPINE   = Value
+  val APP     = Value
+  val SPECIAL = Value
 }
 
 /**
  * Combinator reduction block
- *
- * @param pipelined
- *   optionally insert a pipeline register for decoding
  */
-class Reducer(pipelined: Boolean) extends Module {
+class Reducer extends Module {
   val io = IO(new Bundle {
     val free_addr     = Input(Addr)
     val in            = Flipped(Decoupled(new ActiveApp))
     val out_spine     = Decoupled(new ActiveApp)
-    val out_app1      = Decoupled(new FrozenApp(comIdxs - 1))
-    val out_app2      = Decoupled(new FrozenApp(comIdxs - 2))
-    val out_app3      = Decoupled(new FrozenApp(comIdxs - 3))
-    val addr_consumed = Output(UInt(2.W))
+    val out_app       = Decoupled(new FrozenApp)
+    val addr_consumed = Output(UInt(3.W))
   })
-  import Patterns._
-  val allParsed = allPatterns.map(parse(_)._1)
-  def recordBuilder(r: (Boolean, Int)): DecodeRecord =
-    (new DecodeRecord).Lit(
-      _.valid  -> true.B,
-      _.isPtr  -> r._1.B,
-      _.ptrVal -> r._2.U
-    )
-  def transToRecords(
-      parsed: List[(Boolean, Int)],
-      length: Int
-  ): Vec[DecodeRecord] = {
-    val records = parsed.map { case pRes => recordBuilder(pRes) }
-    VecInit(padWith(records, length, 0.U.asTypeOf(new DecodeRecord)))
-  }
 
-  val spineTable = VecInit(
-    allParsed.map(res => transToRecords(res.spine, comIdxs))
-  )
-  val app1Table = VecInit(
-    allParsed.map(res => transToRecords(res.app1, comIdxs - 1))
-  )
-  val app2Table = VecInit(
-    allParsed.map(res => transToRecords(res.app2, comIdxs - 2))
-  )
-  val app3Table = VecInit(
-    allParsed.map(res => transToRecords(res.app3, comIdxs - 3))
-  )
+  val combTable  = Module(new BlockMem(progSize, Vec(maxAppLen, new Atom)))
+  val regIn      = RegInit(0.U.asTypeOf(new ActiveApp))
+  val regSpine   = RegInit(0.U.asTypeOf(Vec(maxAppLen, new Atom)))
+  val regAddr    = RegInit(0.U.asTypeOf(Addr))
+  val regArity   = RegInit(0.U(log2Ceil(comArity + 1).W))
+  val regStm     = RegInit(ReducerStm.IDLE)
+  val regIdx     = RegInit(0.U(3.W))
+  val regAppMask = RegInit(false.B)
 
-  def trans(r: DecodeRecord): Atom = {
-    val wire = Wire(new Atom)
-    when(r.valid) {
-      when(r.isPtr) {
-        wire := makePtr(true.B, r.ptrVal + io.free_addr)
-      }.otherwise {
-        wire := io.in.bits.app(
-          io.in.bits
-            .app(0)
-            .payload
-            .asTypeOf(new ComPayload)
-            .idxs(r.ptrVal) + 1.U
+  def stepNext(): Unit = { ??? }
+
+  def moreApp(app: Vec[Atom]): Bool = { ??? }
+
+  def findApp(app: Vec[Atom]): UInt = { ??? }
+
+  // give default connection
+  combTable.init()
+  io.out_app.bits  := DontCare
+  io.out_app.valid := false.B
+
+  switch(regStm) {
+    is(ReducerStm.IDLE) { stepNext() }
+    is(ReducerStm.SPINE) {
+      val template = combTable.readOut
+      when(moreApp(template)) {
+        val founded = findApp(template)
+        regSpine := template
+        regStm   := ReducerStm.APP
+        regIdx   := founded
+        regAddr  := io.free_addr
+        combTable.read(
+          regIn.app(0).getCombAddr() + template(founded).getPtr() + 1.U
         )
+      }.otherwise {
+        stepNext()
       }
-    }.otherwise {
-      wire := nopBuilder
     }
-    wire
-  }
-
-  val resSpine = WireInit(0.U.asTypeOf(new ActiveApp))
-  val resApp1  = WireInit(0.U.asTypeOf(new FrozenApp(comIdxs - 1)))
-  val resApp2  = WireInit(0.U.asTypeOf(new FrozenApp(comIdxs - 2)))
-  val resApp3  = WireInit(0.U.asTypeOf(new FrozenApp(comIdxs - 3)))
-
-  switch(io.in.bits.app(0).atomType) {
-    is(AtomType.COM) {
-      val comb = io.in.bits.app(0).payload.asTypeOf(new ComPayload)
-      // pass tags
-      resSpine.stack_idx := io.in.bits.stack_idx
-      resApp1.heap_addr  := io.free_addr
-      resApp2.heap_addr  := io.free_addr + 1.U
-      resApp3.heap_addr  := io.free_addr + 2.U
-      // perform the reduction
-      resSpine.app := padWith(
-        spineTable(comb.pattern).map(trans(_)),
-        maxAppLen,
-        nopBuilder
-      )
-      resApp1.app := app1Table(comb.pattern).map(trans(_))
-      resApp2.app := app2Table(comb.pattern).map(trans(_))
-      resApp3.app := app3Table(comb.pattern).map(trans(_))
-      // handle over-applied spine
-      val redSpineLen =
-        firstWhereC(spineTable(comb.pattern)) { !_.valid }
-      dropUInt(io.in.bits.app, comb.arity +& 1.U, resSpine.app, redSpineLen)
+    is(ReducerStm.APP) {
+      when(io.out_app.ready) {
+        when(moreApp(regSpine)) {
+          val founded = findApp(regSpine)
+          regIdx := founded
+          combTable.read(
+            regIn.app(0).getCombAddr() + regSpine(founded).getPtr() + 1.U
+          )
+          io.out_app.valid := true.B
+        }.otherwise {
+          stepNext()
+        }
+      }
     }
-    is(AtomType.Y) {
-      // pass tags
-      resSpine.stack_idx := io.in.bits.stack_idx
-      resApp1.heap_addr  := io.free_addr
-      // perform the reduction
-      resSpine.app    := io.in.bits.app
-      resSpine.app(0) := io.in.bits.app(1)
-      resSpine.app(1) := makePtr(false.B, io.free_addr)
-      resApp1.app(0)  := io.in.bits.app(1)
-      resApp1.app(1)  := makePtr(false.B, io.free_addr)
-    }
-  }
-
-  val spineReg = RegInit(0.U.asTypeOf(new BitsWithValid(new ActiveApp)))
-  val app1Reg  = RegInit(
-    0.U.asTypeOf(new BitsWithValid(new FrozenApp(comIdxs - 1)))
-  )
-  val app2Reg = RegInit(
-    0.U.asTypeOf(new BitsWithValid(new FrozenApp(comIdxs - 2)))
-  )
-  val app3Reg = RegInit(
-    0.U.asTypeOf(new BitsWithValid(new FrozenApp(comIdxs - 3)))
-  )
-
-  when(io.out_spine.fire) {
-    spineReg.valid := false.B
-  }
-  when(io.out_app1.fire) {
-    app1Reg.valid := false.B
-  }
-  when(io.out_app2.fire) {
-    app2Reg.valid := false.B
-  }
-  when(io.out_app3.fire) {
-    app3Reg.valid := false.B
-  }
-
-  when(io.in.fire) {
-    // set reg contents
-    spineReg.bits := resSpine
-    app1Reg.bits  := resApp1
-    app2Reg.bits  := resApp2
-    app3Reg.bits  := resApp3
-    // set valid bit
-    spineReg.valid := true.B
-    app1Reg.valid  := !resApp1.app(0).isNop()
-    app2Reg.valid  := !resApp2.app(0).isNop()
-    app3Reg.valid  := !resApp3.app(0).isNop()
-  }
-
-  // free addr will be consumed immediatedly
-  io.addr_consumed := Mux(
-    io.in.fire,
-    VecInit(
-      Seq(resApp1.app(0), resApp2.app(0), resApp3.app(0))
-    ).count(!_.isNop()),
-    0.U
-  )
-
-  if (pipelined) {
-    io.in.ready := (!spineReg.valid || io.out_spine.ready) &&
-      (!app1Reg.valid || io.out_app1.ready) &&
-      (!app2Reg.valid || io.out_app2.ready) &&
-      (!app3Reg.valid || io.out_app3.ready)
-    io.out_spine.bits  := spineReg.bits
-    io.out_app1.bits   := app1Reg.bits
-    io.out_app2.bits   := app2Reg.bits
-    io.out_app3.bits   := app3Reg.bits
-    io.out_spine.valid := spineReg.valid
-    io.out_app1.valid  := app1Reg.valid
-    io.out_app2.valid  := app2Reg.valid
-    io.out_app3.valid  := app3Reg.valid
-  } else {
-    io.in.ready := io.out_spine.ready && io.out_app1.ready &&
-      io.out_app2.ready && io.out_app3.ready
-    io.out_spine.bits  := resSpine
-    io.out_app1.bits   := resApp1
-    io.out_app2.bits   := resApp2
-    io.out_app3.bits   := resApp3
-    io.out_spine.valid := io.in.valid && io.out_app1.ready &&
-      io.out_app2.ready && io.out_app3.ready
-    io.out_app1.valid := Mux(io.in.fire, !resApp1.app(0).isNop(), false.B)
-    io.out_app2.valid := Mux(io.in.fire, !resApp2.app(0).isNop(), false.B)
-    io.out_app3.valid := Mux(io.in.fire, !resApp3.app(0).isNop(), false.B)
+    is(ReducerStm.SPECIAL) {}
   }
 }
 
 object Reducer extends App {
   ChiselStage.emitSystemVerilogFile(
-    new Reducer(true),
+    new Reducer,
     Array("--target-dir", "sv-gen"),
     firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info")
   )

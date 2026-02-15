@@ -5,24 +5,16 @@ import chisel3.util._
 
 object SystemConfig {
 
-  /**
-   * size of an Atom
-   */
+  /** size of an Atom */
   val atomSize = 32
 
-  /**
-   * maximum arity of a structured combinator
-   */
+  /** maximum arity of a structured combinator */
   val comArity = 7
 
-  /**
-   * patterns supported by structured combinator
-   */
+  /** patterns supported by structured combinator */
   val comPattern = 64
 
-  /**
-   * maximum number of holes in a structured combinator
-   */
+  /** maximum number of holes in a structured combinator */
   val comIdxs = 6
 
   /**
@@ -34,31 +26,23 @@ object SystemConfig {
    */
   val maxAppLen = 8
 
-  /**
-   * cells in the heap
-   */
+  /** cells in the heap */
   val heapSize = 256 * 1024 // 2 * 1024
 
-  /**
-   * thread resource in a core (number of stacks)
-   */
+  /** thread resource in a core (number of stacks) */
   val maxThreads = 4
 
-  /**
-   * depth of the thread stack in DrfHeap
-   */
+  /** depth of the thread stack in DrfHeap */
   val threadStkDepth = 512 // 256
 
-  /**
-   * depth of the frame stack in DrfHeap
-   */
+  /** depth of the frame stack in DrfHeap */
   val frameStkDepth = 64
 
-  /**
-   * whether the Reducer and ALU blocks are pipelined
-   */
-  val ReducerPipe: Boolean = false
-  val AluPipe: Boolean     = false
+  /** size of the combinator table */
+  val progSize = 1024
+
+  /** whether the ALU block is pipelined */
+  val AluPipe: Boolean = false
 
   val atomPayloadSize = atomSize - AtomType.getWidth
 }

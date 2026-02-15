@@ -110,6 +110,7 @@ class DrfHeap extends Module {
     val free_addr     = Output(Addr)
     val addr_consumed = Input(UInt(2.W))
     val search        = Output(Addr)
+    val found         = Input(Bool())
     // ============ non-essential ports ===================
     val inject = Flipped(Valid(Vec(maxAppLen, new Atom)))
     val start  = Input(Bool())
@@ -527,7 +528,7 @@ class DrfHeap extends Module {
           threadStacks(stkId).pop()
           frameStacks(stkId).pop()
         }
-        writeBack(true) // avoid update here
+        writeBack(true) // TODO avoid update here
         nextMain()
       }
     }

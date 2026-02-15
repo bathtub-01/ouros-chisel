@@ -359,29 +359,3 @@ object Helper {
 
   def Addr = UInt(log2Ceil(heapSize).W)
 }
-
-/**
- * Some useful combinators
- */
-object Combinators {
-  import Helper._
-  // Combinators used in MicroHS, 19 in total
-  val I: Atom   = comBuilder(1, 0, List(0))              // X
-  val K: Atom   = comBuilder(2, 0, List(0))              // X
-  val B: Atom   = comBuilder(3, 3, List(0, 1, 2))        // X(XX)
-  val S: Atom   = comBuilder(3, 6, List(0, 2, 1, 2))     // XX(XX)
-  val C: Atom   = comBuilder(3, 2, List(0, 2, 1))        // XXX
-  val Sp: Atom  = comBuilder(4, 15, List(0, 1, 3, 2, 3)) // X(XX)(XX)
-  val Bp: Atom  = comBuilder(4, 6, List(0, 1, 2, 3))     // XX(XX)
-  val Cp: Atom  = comBuilder(4, 5, List(0, 1, 3, 2))     // X(XX)X
-  val A: Atom   = comBuilder(2, 0, List(1))              // X
-  val U: Atom   = comBuilder(2, 1, List(1, 0))           // XX
-  val Z: Atom   = comBuilder(3, 1, List(0, 1))           // XX
-  val P: Atom   = comBuilder(3, 2, List(2, 0, 1))        // XXX
-  val R: Atom   = comBuilder(3, 2, List(1, 2, 0))        // XXX
-  val O: Atom   = comBuilder(4, 2, List(3, 0, 1))        // XXX
-  val K2: Atom  = comBuilder(3, 0, List(0))              // X
-  val K3: Atom  = comBuilder(4, 0, List(0))              // X
-  val K4: Atom  = comBuilder(5, 0, List(0))              // X
-  val CpB: Atom = comBuilder(4, 6, List(0, 2, 1, 3))     // XX(XX)
-}

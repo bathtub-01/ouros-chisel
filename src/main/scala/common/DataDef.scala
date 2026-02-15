@@ -32,6 +32,7 @@ abstract class AtomPayload extends Bundle
  */
 class PtrPayload extends AtomPayload {
   val unique  = Bool()
+  val ncell   = Bool()
   val pointer = UInt(atomPayloadSize.W)
 }
 
@@ -40,8 +41,7 @@ class PtrPayload extends AtomPayload {
  */
 class ComPayload extends AtomPayload {
   val arity   = UInt(log2Ceil(comArity + 1).W)
-  val pattern = UInt(log2Ceil(comPattern).W)
-  val idxs    = Vec(comIdxs, UInt(log2Ceil(comArity).W))
+  val pointer = UInt(log2Ceil(progSize).W)
 }
 
 /**
@@ -93,6 +93,12 @@ class Atom extends Bundle {
   def isY(): Bool   = this.atomType === AtomType.Y
   def isInt(): Bool = this.atomType === AtomType.INT
   def isPrm(): Bool = this.atomType === AtomType.PRM
+
+  /** assume this Atom is a COM */
+  def getCombAddr(): UInt = this.payload.asTypeOf(new ComPayload).pointer
+
+  /** assume this Atom is a PTR */
+  def getPtr(): UInt = this.payload.asTypeOf(new PtrPayload).pointer
 }
 
 class ActiveApp extends Bundle {
@@ -100,7 +106,7 @@ class ActiveApp extends Bundle {
   val app       = Vec(maxAppLen, new Atom)
 }
 
-class FrozenApp(appLen: Int) extends Bundle {
+class FrozenApp extends Bundle {
   val heap_addr = Addr
-  val app       = Vec(appLen, new Atom)
+  val app       = Vec(maxAppLen, new Atom)
 }
