@@ -44,15 +44,35 @@ class Reducer extends Module {
 
   def findApp(app: Vec[Atom]): UInt = { ??? }
 
+  def isNested(atom: Atom): Bool = { ??? }
+
+  def inst(app: Vec[Atom]): Vec[Atom] = { ??? }
+
   // give default connection
   combTable.init()
-  io.out_app.bits  := DontCare
-  io.out_app.valid := false.B
+  io.in.ready        := false.B
+  io.out_spine.bits  := DontCare
+  io.out_spine.valid := false.B
+  io.out_app.bits    := DontCare
+  io.out_app.valid   := false.B
+  io.addr_consumed   := 0.U
 
   switch(regStm) {
     is(ReducerStm.IDLE) { stepNext() }
     is(ReducerStm.SPINE) {
+      io.out_spine.valid := true.B
+      io.out_spine.bits  := {
+        val comb     = regIn.app(0).payload.asTypeOf(new ComPayload)
+        val resSpine = WireInit(0.U.asTypeOf(new ActiveApp))
+        val insted   = inst(combTable.readOut)
+        resSpine.stack_idx := regIn.stack_idx
+        resSpine.app       := insted
+        val redSpineLen = firstWhere(insted) { _.isNop() }
+        dropUInt(regIn.app, comb.arity +& 1.U, resSpine.app, redSpineLen)
+        resSpine
+      }
       val template = combTable.readOut
+      io.addr_consumed := template.count { isNested(_) }
       when(moreApp(template)) {
         val founded = findApp(template)
         regSpine := template
@@ -67,6 +87,11 @@ class Reducer extends Module {
       }
     }
     is(ReducerStm.APP) {
+      io.out_app.valid := true.B
+      io.out_app.bits  := mkFrozenApp(
+        regAddr + regSpine(regIdx).toPtr().pointer,
+        inst(combTable.readOut)
+      )
       when(io.out_app.ready) {
         when(moreApp(regSpine)) {
           val founded = findApp(regSpine)
@@ -74,13 +99,34 @@ class Reducer extends Module {
           combTable.read(
             regIn.app(0).getCombAddr() + regSpine(founded).getPtr() + 1.U
           )
-          io.out_app.valid := true.B
         }.otherwise {
           stepNext()
         }
       }
     }
-    is(ReducerStm.SPECIAL) {}
+    is(ReducerStm.SPECIAL) {
+      io.out_spine.valid := regAppMask
+      io.out_spine.bits  := {
+        val resSpine = WireInit(0.U.asTypeOf(new ActiveApp))
+        resSpine        := regIn
+        resSpine.app(0) := regIn.app(1)
+        resSpine.app(1) := makePtr(false.B, regAddr)
+        resSpine
+      }
+      io.out_app.valid := true.B
+      io.out_app.bits  := {
+        val outApp = 0.U.asTypeOf(io.out_app.bits)
+        outApp.heap_addr := regAddr
+        outApp.app(0)    := regIn.app(1)
+        outApp.app(1)    := makePtr(false.B, regAddr)
+        outApp
+      }
+      regAppMask := false.B
+      when(io.out_app.ready) {
+        io.addr_consumed := 1.U
+        stepNext()
+      }
+    }
   }
 }
 

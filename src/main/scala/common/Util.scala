@@ -358,4 +358,18 @@ object Helper {
   def boolean2Comb(b: Boolean): Atom = if (b) Combinators.A else Combinators.K
 
   def Addr = UInt(log2Ceil(heapSize).W)
+
+  def mkActiveApp(stk_id: UInt, app: Vec[Atom]): ActiveApp = {
+    val wire = Wire(new ActiveApp)
+    wire.stack_idx := stk_id
+    wire.app       := app
+    wire
+  }
+
+  def mkFrozenApp(heap_addr: UInt, app: Vec[Atom]): FrozenApp = {
+    val wire = Wire(new FrozenApp)
+    wire.heap_addr := heap_addr
+    wire.app       := app
+    wire
+  }
 }

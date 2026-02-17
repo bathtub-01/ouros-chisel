@@ -162,13 +162,6 @@ class DrfHeap extends Module {
     wire
   }
 
-  def mkActiveApp(stk_id: UInt, app: Vec[Atom]): ActiveApp = {
-    val wire = Wire(new ActiveApp)
-    wire.stack_idx := stk_id
-    wire.app       := app
-    wire
-  }
-
   def mkStkCell(frame: Bool, addr: UInt): StkCell = {
     val wire = Wire(new StkCell)
     wire.frame := frame
@@ -271,14 +264,14 @@ class DrfHeap extends Module {
 
   def putOutputMain(stk_idx: UInt, app: Vec[Atom]): Unit = {
     io.out_main.valid := true.B
-    io.out_main.bits  := mkActiveApp(stk_idx, app)
+    io.out_main.bits  := Helper.mkActiveApp(stk_idx, app)
   }
 
   def putOutputSub(): Unit = {
     val dmd = findDmdStk()
     val app = extendToApp(regInSub.app)
     io.out_sub.valid := true.B
-    io.out_sub.bits  := mkActiveApp(dmd, app)
+    io.out_sub.bits  := Helper.mkActiveApp(dmd, app)
   }
 
   def writeBack(useB: Boolean): Unit = {
