@@ -265,6 +265,7 @@ object Helper {
     val payload = Wire(new PtrPayload)
     payload.unique  := unique
     payload.pointer := pointer
+    payload.ncell   := false.B
     val res = Wire(new Atom)
     res.atomType := AtomType.PTR
     res.payload  := payload.asUInt
@@ -274,23 +275,23 @@ object Helper {
   /**
    * Literal COM builder
    */
-  def comBuilder(arity: Int, pattern: Int, idxs: List[Int]): Atom =
-    (new Atom).Lit(
-      _.atomType -> AtomType.COM,
-      _.payload  -> (new ComPayload)
-        .Lit(
-          _.arity   -> arity.U,
-          _.pattern -> pattern.U,
-          _.idxs    -> Vec.Lit(
-            padWith(
-              idxs.map(_.U(log2Ceil(comArity + 1).W)),
-              comIdxs,
-              0.U(log2Ceil(comArity + 1).W)
-            ): _*
-          )
-        )
-        .asUInt
-    )
+  def comBuilder(arity: Int, pattern: Int, idxs: List[Int]): Atom = ???
+  // (new Atom).Lit(
+  //   _.atomType -> AtomType.COM,
+  //   _.payload  -> (new ComPayload)
+  //     .Lit(
+  //       _.arity   -> arity.U,
+  //       _.pattern -> pattern.U,
+  //       _.idxs    -> Vec.Lit(
+  //         padWith(
+  //           idxs.map(_.U(log2Ceil(comArity + 1).W)),
+  //           comIdxs,
+  //           0.U(log2Ceil(comArity + 1).W)
+  //         ): _*
+  //       )
+  //     )
+  //     .asUInt
+  // )
 
   /**
    * Literal INT builder
@@ -355,7 +356,8 @@ object Helper {
   def appBuilder(atoms: Atom*): Vec[Atom] =
     Vec.Lit(padWith(atoms.toSeq, maxAppLen, nopBuilder): _*)
 
-  def boolean2Comb(b: Boolean): Atom = if (b) Combinators.A else Combinators.K
+  def boolean2Comb(b: Boolean): Atom =
+    ??? // if (b) Combinators.A else Combinators.K
 
   def Addr = UInt(log2Ceil(heapSize).W)
 

@@ -42,9 +42,10 @@ class BlockMem[T <: Data](depth: Int, t: T) extends Module {
     io.rdData
   }
 
-  def init() = {
-    io       := DontCare
-    io.wrEna := false.B
+  def init(default_addr: UInt) = {
+    io        := DontCare
+    io.rdAddr := default_addr
+    io.wrEna  := false.B
   }
 }
 

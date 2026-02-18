@@ -103,10 +103,10 @@ class StkCell extends Bundle {
 class DrfHeap extends Module {
   val io = IO(new Bundle {
     val in_main       = Flipped(Decoupled(new ActiveApp))
-    val in_sub        = Flipped(Decoupled(new FrozenApp(8)))
+    val in_sub        = Flipped(Decoupled(new FrozenApp))
     val out_main      = Decoupled(new ActiveApp)
     val out_sub       = Decoupled(new ActiveApp)
-    val out_big_drf   = Decoupled(new FrozenApp(8))
+    val out_big_drf   = Decoupled(new FrozenApp)
     val free_addr     = Output(Addr)
     val addr_consumed = Input(UInt(2.W))
     val search        = Output(Addr)
@@ -121,7 +121,7 @@ class DrfHeap extends Module {
   val stmMain      = RegInit(Stm.IDLE)
   val stmSub       = RegInit(StmSub.IDLE)
   val regInMain    = RegInit(0.U.asTypeOf(new ActiveApp))
-  val regInSub     = RegInit(0.U.asTypeOf(new FrozenApp(8)))
+  val regInSub     = RegInit(0.U.asTypeOf(new FrozenApp))
   val regAddr      = RegInit(0.U.asTypeOf(Addr))
   val regIAddr     = RegInit(0.U.asTypeOf(Addr))
   val threadStacks = Wire(

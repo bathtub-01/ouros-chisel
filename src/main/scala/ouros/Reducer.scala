@@ -41,6 +41,7 @@ class Reducer extends Module {
   val regAppMask = RegInit(false.B)
 
   def stepNext(): Unit = {
+    io.in.ready := true.B
     when(io.in.fire) {
       regIn   := io.in.bits
       regIdx  := 0.U
@@ -63,13 +64,18 @@ class Reducer extends Module {
     }
   }
 
+  class Pair extends Bundle {
+    val atom = new Atom
+    val idx  = UInt(3.W)
+  }
+
   def moreApp(app: Vec[Atom]): Bool = {
     val zipWithIndex = VecInit(
       app.zipWithIndex.map { case (elem, i) =>
-        new Bundle {
-          val atom = elem
-          val idx  = i.U
-        }
+        val pair = Wire(new Pair)
+        pair.atom := elem
+        pair.idx  := i.U
+        pair
       }
     )
     zipWithIndex.exists(p => p.idx > regIdx && isNested(p.atom))
@@ -78,10 +84,10 @@ class Reducer extends Module {
   def findApp(app: Vec[Atom]): UInt = {
     val zipWithIndex = VecInit(
       app.zipWithIndex.map { case (elem, i) =>
-        new Bundle {
-          val atom = elem
-          val idx  = i.U
-        }
+        val pair = Wire(new Pair)
+        pair.atom := elem
+        pair.idx  := i.U
+        pair
       }
     )
     zipWithIndex.indexWhere(p => p.idx > regIdx && isNested(p.atom))
@@ -98,10 +104,33 @@ class Reducer extends Module {
     res
   }
 
-  def inst(app: Vec[Atom]): Vec[Atom] = { ??? }
+  def inst(app: Vec[Atom]): Vec[Atom] = {
+    val res = WireInit(app)
+    res.zip(app).foreach { case (r, atom) =>
+      switch(atom.atomType) {
+        is(AtomType.PTR) {
+          val ptr = atom.toPtr()
+          when(ptr.ncell) {
+            r := makePtr(true.B, regAddr + ptr.pointer)
+          }
+        }
+        is(AtomType.ARG) {
+          val arg      = atom.toArg()
+          val argument = regIn.app(arg.arg + 1.U)
+          when(argument.isPtr()) {
+            val ptr = argument.toPtr()
+            r := makePtr(arg.unique && ptr.unique, ptr.pointer)
+          }.otherwise {
+            r := argument
+          }
+        }
+      }
+    }
+    res
+  }
 
   // give default connection
-  combTable.init()
+  combTable.init(0.U)
   io.in.ready        := false.B
   io.out_spine.bits  := DontCare
   io.out_spine.valid := false.B
@@ -167,7 +196,7 @@ class Reducer extends Module {
       }
       io.out_app.valid := true.B
       io.out_app.bits  := {
-        val outApp = 0.U.asTypeOf(io.out_app.bits)
+        val outApp = WireInit(0.U.asTypeOf(new FrozenApp))
         outApp.heap_addr := regAddr
         outApp.app(0)    := regIn.app(1)
         outApp.app(1)    := makePtr(false.B, regAddr)

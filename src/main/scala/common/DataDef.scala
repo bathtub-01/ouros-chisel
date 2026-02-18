@@ -22,31 +22,26 @@ object AtomType extends ChiselEnum {
   val INT = Value
   val PRM = Value
   val Y   = Value
+  val ARG = Value
   val ERR = Value
 }
 
 abstract class AtomPayload extends Bundle
 
-/**
- * Payload for FUN and PTR, which only contains a pointer
- */
+/** Payload for FUN and PTR, which only contains a pointer */
 class PtrPayload extends AtomPayload {
   val unique  = Bool()
   val ncell   = Bool()
   val pointer = UInt(atomPayloadSize.W)
 }
 
-/**
- * Payload for COM, with arity, pattern and an index vector
- */
+/** Payload for COM, with arity, pattern and an index vector */
 class ComPayload extends AtomPayload {
   val arity   = UInt(log2Ceil(comArity + 1).W)
   val pointer = UInt(log2Ceil(progSize).W)
 }
 
-/**
- * Payload for INT, which only contains the value
- */
+/** Payload for INT, which only contains the value */
 class IntPayload extends AtomPayload {
   val value = SInt(atomPayloadSize.W)
 }
@@ -71,11 +66,15 @@ class AluFunction extends Bundle {
   val is_cond_inv = Bool()
 }
 
-/**
- * Payload for PRM, contains the control information to ALU
- */
+/** Payload for PRM, contains the control information to ALU */
 class PrmPayload extends AtomPayload {
   val fun = new AluFunction
+}
+
+/** Payload for ARG, with meta-data for argument pointers */
+class ArgPayload extends AtomPayload {
+  val arg    = UInt(3.W)
+  val unique = Bool()
 }
 
 class Atom extends Bundle {
@@ -86,6 +85,7 @@ class Atom extends Bundle {
   def toInt(): IntPayload = this.payload.asTypeOf(new IntPayload)
   def toCom(): ComPayload = this.payload.asTypeOf(new ComPayload)
   def toPtr(): PtrPayload = this.payload.asTypeOf(new PtrPayload)
+  def toArg(): ArgPayload = this.payload.asTypeOf(new ArgPayload)
 
   def isNop(): Bool = this.atomType === AtomType.NOP
   def isPtr(): Bool = this.atomType === AtomType.PTR
@@ -93,6 +93,7 @@ class Atom extends Bundle {
   def isY(): Bool   = this.atomType === AtomType.Y
   def isInt(): Bool = this.atomType === AtomType.INT
   def isPrm(): Bool = this.atomType === AtomType.PRM
+  def isArg(): Bool = this.atomType === AtomType.ARG
 
   /** assume this Atom is a COM */
   def getCombAddr(): UInt = this.payload.asTypeOf(new ComPayload).pointer

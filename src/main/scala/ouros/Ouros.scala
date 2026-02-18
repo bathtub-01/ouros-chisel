@@ -45,15 +45,16 @@ class Ouros extends Module {
     wire.valid := false.B
     wire
   }
+
   def exFrozen(fa: FrozenApp): FrozenApp = {
-    val res = Wire(new FrozenApp(8))
+    val res = Wire(new FrozenApp)
     res.heap_addr := fa.heap_addr
     res.app       := extendToApp(fa.app, 8)
     res
   }
 
   val dheap  = Module(new DrfHeap)
-  val reducr = Module(new Reducer(pipelined = ReducerPipe))
+  val reducr = Module(new Reducer)
   val alu    = Module(new Alu(pipelined = AluPipe))
 
   val wireToDheapA0 = wireGen
@@ -112,11 +113,11 @@ class Ouros extends Module {
   val bufferDheapA3 = Queue(wireToDheapA3, maxThreads + 1) // from dheap.sub
   val arbiterDheapA = Module(new Arbiter(new ActiveApp, 4))
 
-  val bufferDheapB0 = Queue(reducr.io.out_app1, maxThreads + 1)
-  val bufferDheapB1 = Queue(reducr.io.out_app2, maxThreads + 1)
-  val bufferDheapB2 = Queue(reducr.io.out_app3, maxThreads + 1)
+  // val bufferDheapB0 = Queue(reducr.io.out_app1, maxThreads + 1)
+  // val bufferDheapB1 = Queue(reducr.io.out_app2, maxThreads + 1)
+  // val bufferDheapB2 = Queue(reducr.io.out_app3, maxThreads + 1)
   val bufferDheapB3 = Queue(dheap.io.out_big_drf, maxThreads + 1)
-  val arbiterDheapB = Module(new Arbiter(new FrozenApp(8), 4))
+  val arbiterDheapB = Module(new Arbiter(new FrozenApp, 4))
 
   val bufferReducr0 = Queue(wireToReducr0, maxThreads + 1) // from reducer
   val bufferReducr1 = Queue(wireToReducr1, maxThreads + 1) // from dheap.main
@@ -136,16 +137,16 @@ class Ouros extends Module {
     )
     .foreach { case (a, b) => a :<>= b }
 
-  arbiterDheapB.io.in
-    .zip(
-      Seq(
-        bufferDheapB0.map(exFrozen(_)),
-        bufferDheapB1.map(exFrozen(_)),
-        bufferDheapB2.map(exFrozen((_))),
-        bufferDheapB3
-      )
-    )
-    .foreach { case (a, b) => a :<>= b }
+  // arbiterDheapB.io.in
+  //   .zip(
+  //     Seq(
+  //       bufferDheapB0.map(exFrozen(_)),
+  //       bufferDheapB1.map(exFrozen(_)),
+  //       bufferDheapB2.map(exFrozen((_))),
+  //       bufferDheapB3
+  //     )
+  //   )
+  //   .foreach { case (a, b) => a :<>= b }
 
   arbiterReducr.io.in
     .zip(
