@@ -27,6 +27,7 @@ class Reducer extends Module {
     val out_spine     = Decoupled(new ActiveApp)
     val out_app       = Decoupled(new FrozenApp)
     val addr_consumed = Output(UInt(3.W))
+    val need_split    = Input(Bool())
   })
 
   val combTable  = Module(new BlockMem(progSize, Vec(maxAppLen, new Atom)))
@@ -36,15 +37,66 @@ class Reducer extends Module {
   val regArity   = RegInit(0.U(log2Ceil(comArity + 1).W))
   val regStm     = RegInit(ReducerStm.IDLE)
   val regIdx     = RegInit(0.U(3.W))
+  val regCtr     = RegInit(0.U(3.W))
   val regAppMask = RegInit(false.B)
 
-  def stepNext(): Unit = { ??? }
+  def stepNext(): Unit = {
+    when(io.in.fire) {
+      regIn   := io.in.bits
+      regIdx  := 0.U
+      regCtr  := 0.U
+      regAddr := io.free_addr + io.addr_consumed + io.need_split.asUInt
+      switch(io.in.bits.app(0).atomType) {
+        is(AtomType.COM) {
+          val comb = io.in.bits.app(0).toCom()
+          regStm   := ReducerStm.SPINE
+          regArity := comb.arity
+          combTable.read(comb.pointer)
+        }
+        is(AtomType.Y) {
+          regAppMask := true.B
+          regStm     := ReducerStm.SPECIAL
+        }
+      }
+    }.otherwise {
+      regStm := ReducerStm.IDLE
+    }
+  }
 
-  def moreApp(app: Vec[Atom]): Bool = { ??? }
+  def moreApp(app: Vec[Atom]): Bool = {
+    val zipWithIndex = VecInit(
+      app.zipWithIndex.map { case (elem, i) =>
+        new Bundle {
+          val atom = elem
+          val idx  = i.U
+        }
+      }
+    )
+    zipWithIndex.exists(p => p.idx > regIdx && isNested(p.atom))
+  }
 
-  def findApp(app: Vec[Atom]): UInt = { ??? }
+  def findApp(app: Vec[Atom]): UInt = {
+    val zipWithIndex = VecInit(
+      app.zipWithIndex.map { case (elem, i) =>
+        new Bundle {
+          val atom = elem
+          val idx  = i.U
+        }
+      }
+    )
+    zipWithIndex.indexWhere(p => p.idx > regIdx && isNested(p.atom))
+  }
 
-  def isNested(atom: Atom): Bool = { ??? }
+  def isNested(atom: Atom): Bool = {
+    val res = WireInit(false.B)
+    switch(atom.atomType) {
+      is(AtomType.PTR) {
+        val ptr = atom.toPtr()
+        res := ptr.ncell
+      }
+    }
+    res
+  }
 
   def inst(app: Vec[Atom]): Vec[Atom] = { ??? }
 
@@ -78,7 +130,7 @@ class Reducer extends Module {
         regSpine := template
         regStm   := ReducerStm.APP
         regIdx   := founded
-        regAddr  := io.free_addr
+        regCtr   := 1.U
         combTable.read(
           regIn.app(0).getCombAddr() + template(founded).getPtr() + 1.U
         )
