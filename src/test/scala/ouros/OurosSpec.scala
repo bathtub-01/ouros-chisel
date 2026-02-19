@@ -16,7 +16,13 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     dut.clock.step(3)
     // ====== program injection =======
     dut.io.inject.valid.poke(true.B)
-    for (app <- benchmark.prog) {
+    dut.io.inject_to.poke(InjectTo.Heap)
+    for (app <- benchmark.heap_img) {
+      dut.io.inject.bits.zip(app).foreach { case (p, a) => p.poke(a) }
+      dut.clock.step()
+    }
+    dut.io.inject_to.poke(InjectTo.Comb)
+    for (app <- benchmark.comb_img) {
       dut.io.inject.bits.zip(app).foreach { case (p, a) => p.poke(a) }
       dut.clock.step()
     }
@@ -26,7 +32,7 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     dut.clock.step()
     dut.io.start.poke(false.B)
     // ============ run ===============
-    while (!dut.io.done.peekBoolean() && cycles <= 1_000_000) {
+    while (!dut.io.done.peekBoolean() && cycles <= 1_000_00) {
       dut.clock.step()
       cycles = cycles + 1
     }
@@ -46,9 +52,9 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     }
     .foreach { case (name, cycles) => println(s"${name}: ${cycles} consumed") }
 
-  def quickBenchmarks() = "Quick Benchmarks" in {
-    runBench(List(BoolAnd, BoolNest, AluOp, MapY))
-  }
+  // def quickBenchmarks() = "Quick Benchmarks" in {
+  //   runBench(List(BoolAnd, BoolNest, AluOp, MapY))
+  // }
 
   def fullBenchmarks() = "Benchmarks" in {
     runBench(
@@ -72,7 +78,7 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     )
   }
 
-  // inspect(Mss)
+  inspect(SumEuler)
   // quickBenchmarks()
-  fullBenchmarks()
+  // fullBenchmarks()
 }

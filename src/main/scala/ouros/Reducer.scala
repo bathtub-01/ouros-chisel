@@ -28,6 +28,8 @@ class Reducer extends Module {
     val out_app       = Decoupled(new FrozenApp)
     val addr_consumed = Output(UInt(3.W))
     val need_split    = Input(Bool())
+    // ============ non-essential ports ===================
+    val inject = Flipped(Valid(Vec(maxAppLen, new Atom)))
   })
 
   val combTable  = Module(new BlockMem(progSize, Vec(maxAppLen, new Atom)))
@@ -37,7 +39,6 @@ class Reducer extends Module {
   val regArity   = RegInit(0.U(log2Ceil(comArity + 1).W))
   val regStm     = RegInit(ReducerStm.IDLE)
   val regIdx     = RegInit(0.U(3.W))
-  val regCtr     = RegInit(0.U(3.W))
   val regAppMask = RegInit(false.B)
 
   def stepNext(): Unit = {
@@ -45,7 +46,6 @@ class Reducer extends Module {
     when(io.in.fire) {
       regIn   := io.in.bits
       regIdx  := 0.U
-      regCtr  := 0.U
       regAddr := io.free_addr + io.addr_consumed + io.need_split.asUInt
       switch(io.in.bits.app(0).atomType) {
         is(AtomType.COM) {
@@ -138,6 +138,13 @@ class Reducer extends Module {
   io.out_app.valid   := false.B
   io.addr_consumed   := 0.U
 
+  // program injection
+  when(io.inject.valid) {
+    combTable.write(io.inject.bits, regAddr)
+    regAddr := regAddr + 1.U
+  }
+
+  // main logic
   switch(regStm) {
     is(ReducerStm.IDLE) { stepNext() }
     is(ReducerStm.SPINE) {
@@ -159,7 +166,6 @@ class Reducer extends Module {
         regSpine := template
         regStm   := ReducerStm.APP
         regIdx   := founded
-        regCtr   := 1.U
         combTable.read(
           regIn.app(0).getCombAddr() + template(founded).getPtr() + 1.U
         )

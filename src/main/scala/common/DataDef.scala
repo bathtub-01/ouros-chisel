@@ -28,11 +28,11 @@ object AtomType extends ChiselEnum {
 
 abstract class AtomPayload extends Bundle
 
-/** Payload for FUN and PTR, which only contains a pointer */
+/** Payload for PTR, containing the pointer and meta-data */
 class PtrPayload extends AtomPayload {
   val unique  = Bool()
   val ncell   = Bool()
-  val pointer = UInt(atomPayloadSize.W)
+  val pointer = UInt((atomPayloadSize - 2).W)
 }
 
 /** Payload for COM, with arity, pattern and an index vector */

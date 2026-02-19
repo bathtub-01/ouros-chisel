@@ -6,6 +6,7 @@ import chisel3.util._
 import common._
 
 trait Benchmark {
-  val prog: Seq[Vec[Atom]]
+  val heap_img: Seq[Vec[Atom]]
+  val comb_img: Seq[Vec[Atom]]
   val combinatorCount: Int
 }

@@ -67,8 +67,10 @@ class Alu(pipelined: Boolean) extends Module {
     // True - A, False - K
     when(aluCore.io.out === 0.U) {
       // aluOut := Combinators.K
+      aluOut := comBuilder(2, 0)
     }.otherwise {
       // aluOut := Combinators.A
+      aluOut := comBuilder(2, 1)
     }
   }.otherwise {
     aluOut.atomType := AtomType.INT

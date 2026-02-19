@@ -3,60 +3,106 @@ import common.Helper._
 import common.Atom
 import chisel3.Vec
  
-// Functions in this file: 3
-// Apps in this file: 9
-// Combinators in this file: 9
 object TreeSum extends Benchmark {
 override def toString() = "TreeSum" 
-val combinatorCount = 9
-val prog = Seq(
- // FUN0TreeSum.main
+val combinatorCount = 10
+val heap_img = Seq(
+// AExp0
 appBuilder( // 0
-ptrBuilder(2),
-ptrBuilder(1),
+comBuilder(1,7),
+ptrBuilder(1, false, false),
 ),
 appBuilder( // 1
-ptrBuilder(5),
+comBuilder(1,14),
 intBuilder(13),
 ),
- // FUN1TreeSum.treeSum
+)
+val comb_img = Seq(
+// AExp0
+appBuilder( // 0
+argBuilder(0, true),
+),
+// AExp1
+appBuilder( // 1
+argBuilder(1, true),
+),
+// AExp2
 appBuilder( // 2
-comBuilder(3,2,List(2, 0, 1)), // XXX
-intBuilder(1),
-ptrBuilder(4),
+prmBuilder("+"),
+ptrBuilder(1, true, true),
+ptrBuilder(0, true, true),
 ),
 appBuilder( // 3
-comBuilder(4,57,List(0, 0, 1, 2, 1, 3)), // X(X(XX)(XX))
-prmBuilder("+"),
-ptrBuilder(2),
+comBuilder(1,7),
+argBuilder(1, true),
 ),
 appBuilder( // 4
-comBuilder(4,4,List(0, 2, 3, 1)), // XXXX
-ptrBuilder(3),
-intBuilder(1),
+comBuilder(1,7),
+argBuilder(0, true),
 ),
- // FUN2TreeSum.mkTree
+// AExp3
 appBuilder( // 5
-comBuilder(3,2,List(0, 2, 1)), // XXX
-ptrBuilder(8),
-comBuilder(2,0,List(0)), // X
+prmBuilder("+"),
+ptrBuilder(0, true, true),
+intBuilder(1),
 ),
 appBuilder( // 6
-comBuilder(3,2,List(0, 2, 1)), // XXX
+comBuilder(2,2),
+argBuilder(0, true),
+argBuilder(1, true),
+),
+// AExp4
+appBuilder( // 7
+argBuilder(0, true),
+intBuilder(1),
+comBuilder(2,5),
+),
+// AExp5
+appBuilder( // 8
+comBuilder(4,16),
+ptrBuilder(1, true, true),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 9
+comBuilder(1,14),
+argBuilder(0, false),
+),
+appBuilder( // 10
+comBuilder(1,14),
+argBuilder(0, false),
+),
+// AExp6
+appBuilder( // 11
 prmBuilder("-"),
+argBuilder(0, true),
 intBuilder(1),
 ),
-appBuilder( // 7
-comBuilder(3,15,List(0, 1, 2, 1, 2)), // X(XX)(XX)
-comBuilder(4,2,List(3, 0, 1)), // XXX
-ptrBuilder(5),
+// AExp7
+appBuilder( // 12
+comBuilder(1,8),
+ptrBuilder(0, true, true),
 ),
-appBuilder( // 8
-comBuilder(5,43,List(0, 4, 1, 2, 3, 4)), // XXX(X(XX))
+appBuilder( // 13
+comBuilder(1,11),
+argBuilder(0, true),
+),
+// AExp8
+appBuilder( // 14
 prmBuilder("=="),
+argBuilder(0, false),
 intBuilder(0),
-ptrBuilder(7),
-ptrBuilder(6),
+ptrBuilder(0, true, true),
+comBuilder(2,0),
+),
+appBuilder( // 15
+comBuilder(1,12),
+argBuilder(0, false),
+),
+// AExp9
+appBuilder( // 16
+argBuilder(3, true),
+argBuilder(0, true),
+argBuilder(1, true),
 ),
 )
 }

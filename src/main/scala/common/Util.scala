@@ -7,6 +7,7 @@ import chisel3.experimental.VecLiterals._
 
 import common._
 import common.SystemConfig._
+import common.Helper.ptrBuilder
 
 class BitsWithValid[T <: Data](t: T) extends Bundle {
   val valid = Bool()
@@ -101,9 +102,7 @@ object Helper {
    */
   def firstWhere[T <: Data](v: Vec[T])(p: T => Bool): UInt = treePred(v)(p)._2
 
-  /**
-   * Similar to `firstWhere`, but uses a chain.
-   */
+  /** Similar to `firstWhere`, but uses a chain. */
   def firstWhereC[T <: Data](v: Vec[T])(p: T => Bool): UInt = {
     val res = Wire(UInt(log2Ceil(v.length + 1).W))
     res := v.length.U
@@ -122,9 +121,7 @@ object Helper {
    */
   def appLen(app: Vec[Atom]): UInt = Helper.firstWhere(app) { _.isNop() }
 
-  /**
-   * The arity of an Atom.
-   */
+  /** The arity of an Atom. */
   def arityOf(atm: Atom): UInt = {
     val res = Wire(UInt())
     res := 0.U // wild-card case
@@ -226,41 +223,38 @@ object Helper {
       l ++ Seq.fill(expectedLen - l.length)(default)
   }
 
-  /**
-   * Literal NOP builder
-   */
+  /** Literal NOP builder */
   def nopBuilder: Atom =
     (new Atom).Lit(
       _.atomType -> AtomType.NOP,
       _.payload  -> 0.U
     )
 
-  /**
-   * Literal ERR builder
-   */
+  /** Literal ERR builder */
   def errorBuilder(code: Int): Atom =
     (new Atom).Lit(
       _.atomType -> AtomType.ERR,
       _.payload  -> code.U
     )
 
-  /**
-   * Literal PTR builder
-   */
-  def ptrBuilder(pointer: Int, unique: Boolean = false): Atom =
+  /** Literal PTR builder */
+  def ptrBuilder(
+      pointer: Int,
+      unique: Boolean,
+      newcell: Boolean = false
+  ): Atom =
     (new Atom).Lit(
       _.atomType -> AtomType.PTR,
       _.payload  -> (new PtrPayload)
         .Lit(
           _.unique  -> unique.B,
+          _.ncell   -> newcell.B,
           _.pointer -> pointer.U
         )
         .asUInt
     )
 
-  /**
-   * Dynamic PTR maker
-   */
+  /** Dynamic PTR maker */
   def makePtr(unique: Bool, pointer: UInt): Atom = {
     val payload = Wire(new PtrPayload)
     payload.unique  := unique
@@ -272,30 +266,19 @@ object Helper {
     res
   }
 
-  /**
-   * Literal COM builder
-   */
-  def comBuilder(arity: Int, pattern: Int, idxs: List[Int]): Atom = ???
-  // (new Atom).Lit(
-  //   _.atomType -> AtomType.COM,
-  //   _.payload  -> (new ComPayload)
-  //     .Lit(
-  //       _.arity   -> arity.U,
-  //       _.pattern -> pattern.U,
-  //       _.idxs    -> Vec.Lit(
-  //         padWith(
-  //           idxs.map(_.U(log2Ceil(comArity + 1).W)),
-  //           comIdxs,
-  //           0.U(log2Ceil(comArity + 1).W)
-  //         ): _*
-  //       )
-  //     )
-  //     .asUInt
-  // )
+  /** Literal COM builder */
+  def comBuilder(arity: Int, ptr: Int): Atom =
+    (new Atom).Lit(
+      _.atomType -> AtomType.COM,
+      _.payload  -> (new ComPayload)
+        .Lit(
+          _.arity   -> arity.U,
+          _.pointer -> ptr.U,
+        )
+        .asUInt
+    )
 
-  /**
-   * Literal INT builder
-   */
+  /** Literal INT builder */
   def intBuilder(value: Int): Atom =
     (new Atom).Lit(
       _.atomType -> AtomType.INT,
@@ -321,9 +304,7 @@ object Helper {
     }
   }
 
-  /**
-   * Literal PRM builder
-   */
+  /** Literal PRM builder */
   def prmBuilder(op: String): Atom = {
     val (opCode, isSub, isCondInv) = strToOp(op)
 
@@ -341,9 +322,19 @@ object Helper {
     )
   }
 
-  /**
-   * Literal Y builder
-   */
+  /** Literal ARG builder */
+  def argBuilder(idx: Int, unique: Boolean): Atom =
+    (new Atom).Lit(
+      _.atomType -> AtomType.ARG,
+      _.payload  -> (new ArgPayload)
+        .Lit(
+          _.arg    -> idx.U,
+          _.unique -> unique.B
+        )
+        .asUInt
+    )
+
+  /** Literal Y builder */
   def yBuilder(): Atom =
     (new Atom).Lit(
       _.atomType -> AtomType.Y,
@@ -374,4 +365,8 @@ object Helper {
     wire.app       := app
     wire
   }
+}
+
+object PrintPTR extends App {
+  println(s"ptrBuilder(0, true, true): ${ptrBuilder(0, true, true)}")
 }

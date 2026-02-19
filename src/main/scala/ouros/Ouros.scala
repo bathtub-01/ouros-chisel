@@ -17,14 +17,20 @@ object Dest extends ChiselEnum {
 }
 import Dest._
 
+object InjectTo extends ChiselEnum {
+  val Heap = Value
+  val Comb = Value
+}
+
 /**
  * An Ouros core.
  */
 class Ouros extends Module {
   val io = IO(new Bundle {
-    val start  = Input(Bool())
-    val inject = Flipped(Valid(Vec(maxAppLen, new Atom)))
-    val done   = Output(Bool())
+    val start     = Input(Bool())
+    val inject_to = Input(InjectTo())
+    val inject    = Flipped(Valid(Vec(maxAppLen, new Atom)))
+    val done      = Output(Bool())
   })
 
   def getDest(app: Vec[Atom]): Dest.Type = {
@@ -44,13 +50,6 @@ class Ouros extends Module {
     wire       := DontCare
     wire.valid := false.B
     wire
-  }
-
-  def exFrozen(fa: FrozenApp): FrozenApp = {
-    val res = Wire(new FrozenApp)
-    res.heap_addr := fa.heap_addr
-    res.app       := extendToApp(fa.app, 8)
-    res
   }
 
   val dheap  = Module(new DrfHeap)
@@ -113,11 +112,9 @@ class Ouros extends Module {
   val bufferDheapA3 = Queue(wireToDheapA3, maxThreads + 1) // from dheap.sub
   val arbiterDheapA = Module(new Arbiter(new ActiveApp, 4))
 
-  // val bufferDheapB0 = Queue(reducr.io.out_app1, maxThreads + 1)
-  // val bufferDheapB1 = Queue(reducr.io.out_app2, maxThreads + 1)
-  // val bufferDheapB2 = Queue(reducr.io.out_app3, maxThreads + 1)
-  val bufferDheapB3 = Queue(dheap.io.out_big_drf, maxThreads + 1)
-  val arbiterDheapB = Module(new Arbiter(new FrozenApp, 4))
+  val bufferDheapB0 = Queue(reducr.io.out_app, maxThreads + 1) // from reducer
+  val bufferDheapB1 = Queue(dheap.io.out_big_drf, maxThreads + 1)
+  val arbiterDheapB = Module(new Arbiter(new FrozenApp, 2))
 
   val bufferReducr0 = Queue(wireToReducr0, maxThreads + 1) // from reducer
   val bufferReducr1 = Queue(wireToReducr1, maxThreads + 1) // from dheap.main
@@ -137,16 +134,11 @@ class Ouros extends Module {
     )
     .foreach { case (a, b) => a :<>= b }
 
-  // arbiterDheapB.io.in
-  //   .zip(
-  //     Seq(
-  //       bufferDheapB0.map(exFrozen(_)),
-  //       bufferDheapB1.map(exFrozen(_)),
-  //       bufferDheapB2.map(exFrozen((_))),
-  //       bufferDheapB3
-  //     )
-  //   )
-  //   .foreach { case (a, b) => a :<>= b }
+  arbiterDheapB.io.in
+    .zip(
+      Seq(bufferDheapB0, bufferDheapB1)
+    )
+    .foreach { case (a, b) => a :<>= b }
 
   arbiterReducr.io.in
     .zip(
@@ -167,11 +159,16 @@ class Ouros extends Module {
   // gc signals
   reducr.io.free_addr    := dheap.io.free_addr
   dheap.io.addr_consumed := reducr.io.addr_consumed
+  reducr.io.need_split   := dheap.io.out_big_drf.valid
+  dheap.io.found         := DontCare
 
   // non-essential ports
-  dheap.io.inject := io.inject
-  dheap.io.start  := io.start
-  io.done         := dheap.io.done
+  dheap.io.inject.valid  := io.inject_to === InjectTo.Heap && io.inject.valid
+  dheap.io.inject.bits   := io.inject.bits
+  dheap.io.start         := io.start
+  io.done                := dheap.io.done
+  reducr.io.inject.valid := io.inject_to === InjectTo.Comb && io.inject.valid
+  reducr.io.inject.bits  := io.inject.bits
 }
 
 object Ouros extends App {

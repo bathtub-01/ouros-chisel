@@ -13,7 +13,13 @@ object Main extends App with ChiselSim {
     dut.clock.step(3)
     // ====== program injection =======
     dut.io.inject.valid.poke(true.B)
-    for (app <- benchmark.prog) {
+    dut.io.inject_to.poke(InjectTo.Heap)
+    for (app <- benchmark.heap_img) {
+      dut.io.inject.bits.zip(app).foreach { case (p, a) => p.poke(a) }
+      dut.clock.step()
+    }
+    dut.io.inject_to.poke(InjectTo.Comb)
+    for (app <- benchmark.comb_img) {
       dut.io.inject.bits.zip(app).foreach { case (p, a) => p.poke(a) }
       dut.clock.step()
     }

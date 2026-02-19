@@ -3,262 +3,463 @@ import common.Helper._
 import common.Atom
 import chisel3.Vec
  
-// Functions in this file: 15
-// Apps in this file: 46
-// Combinators in this file: 59
 object SumEuler extends Benchmark {
 override def toString() = "SumEuler" 
-val combinatorCount = 59
-val prog = Seq(
- // FUN0SumEuler.main
+val combinatorCount = 39
+val heap_img = Seq(
+// AExp0
 appBuilder( // 0
-ptrBuilder(2),
-ptrBuilder(1),
+ptrBuilder(2, false, false),
+ptrBuilder(1, false, false),
 ),
 appBuilder( // 1
-ptrBuilder(5),
+comBuilder(2,12),
 intBuilder(1),
 intBuilder(30),
 ),
- // FUN1NanoPrelude.sum
+// AExp1
 appBuilder( // 2
-ptrBuilder(3),
+comBuilder(2,6),
 prmBuilder("+"),
 intBuilder(0),
 ),
- // FUN2NanoPrelude.foldr
+// AExp2
 appBuilder( // 3
-comBuilder(4,7,List(0, 1, 2, 3)), // X(XXX)
 yBuilder(),
-ptrBuilder(4),
+comBuilder(3,31),
+intBuilder(0),
 ),
+)
+val comb_img = Seq(
+// AExp0
+appBuilder( // 0
+argBuilder(0, true),
+),
+// AExp1
+appBuilder( // 1
+argBuilder(1, true),
+),
+// AExp2
+appBuilder( // 2
+argBuilder(0, true),
+argBuilder(2, true),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 3
+argBuilder(1, true),
+argBuilder(3, true),
+),
+// AExp3
 appBuilder( // 4
-comBuilder(5,16,List(4, 2, 0, 1, 3)), // XX(XXX)
-comBuilder(4,6,List(0, 2, 1, 3)), // XX(XX)
+argBuilder(3, true),
+argBuilder(1, true),
+ptrBuilder(0, true, true),
 ),
- // FUN3SumEuler.totients
 appBuilder( // 5
-comBuilder(3,5,List(0, 1, 2, 2)), // X(XX)X
-ptrBuilder(7),
-ptrBuilder(6),
+comBuilder(4,2),
+argBuilder(0, true),
+argBuilder(2, true),
 ),
+// AExp4
 appBuilder( // 6
-comBuilder(4,7,List(0, 1, 3, 2)), // X(XXX)
-ptrBuilder(39),
-prmBuilder("+"),
-intBuilder(1),
+yBuilder(),
+ptrBuilder(0, true, true),
 ),
 appBuilder( // 7
-comBuilder(6,48,List(0, 1, 2, 4, 3, 5)), // XX(XX(XX))
-ptrBuilder(8),
-ptrBuilder(11),
-comBuilder(4,2,List(3, 0, 1)), // XXX
+comBuilder(4,4),
+argBuilder(0, true),
+argBuilder(1, true),
 ),
- // FUN4NanoPrelude.map
+// AExp5
 appBuilder( // 8
-comBuilder(3,3,List(0, 1, 2)), // X(XX)
-yBuilder(),
-ptrBuilder(10),
+comBuilder(2,78),
+ptrBuilder(0, true, true),
 ),
 appBuilder( // 9
-comBuilder(5,15,List(0, 1, 3, 2, 4)), // X(XX)(XX)
-comBuilder(4,2,List(3, 0, 1)), // XXX
-),
-appBuilder( // 10
-comBuilder(5,16,List(4, 0, 1, 2, 3)), // XX(XXX)
-comBuilder(2,0,List(0)), // X
-ptrBuilder(9),
-),
- // FUN5SumEuler.euler
-appBuilder( // 11
-comBuilder(5,57,List(0, 1, 2, 4, 3, 4)), // X(X(XX)(XX))
-ptrBuilder(13),
-ptrBuilder(16),
-ptrBuilder(20),
-ptrBuilder(12),
-),
-appBuilder( // 12
-comBuilder(5,16,List(0, 1, 2, 4, 3)), // XX(XXX)
-ptrBuilder(39),
-intBuilder(1),
-prmBuilder("-"),
-intBuilder(1),
-),
- // FUN6NanoPrelude.length
-appBuilder( // 13
-yBuilder(),
-ptrBuilder(15),
-intBuilder(0),
-),
-appBuilder( // 14
-comBuilder(5,7,List(2, 0, 3, 1)), // X(XXX)
 prmBuilder("+"),
+argBuilder(0, true),
 intBuilder(1),
+),
+// AExp6
+appBuilder( // 10
+comBuilder(4,21),
+argBuilder(0, false),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 11
+comBuilder(1,8),
+argBuilder(0, false),
+argBuilder(1, true),
+),
+// AExp7
+appBuilder( // 12
+comBuilder(1,19),
+comBuilder(1,27),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 13
+comBuilder(2,10),
+argBuilder(0, true),
+argBuilder(1, true),
+),
+// AExp8
+appBuilder( // 14
+comBuilder(4,21),
+ptrBuilder(1, true, true),
+ptrBuilder(0, true, true),
 ),
 appBuilder( // 15
-comBuilder(4,16,List(3, 2, 0, 1, 2)), // XX(XXX)
-ptrBuilder(14),
+argBuilder(1, true),
+argBuilder(3, true),
 ),
- // FUN7NanoPrelude.filter
 appBuilder( // 16
-comBuilder(3,3,List(0, 1, 2)), // X(XX)
-yBuilder(),
-ptrBuilder(19),
+argBuilder(0, true),
+argBuilder(2, true),
 ),
+// AExp9
 appBuilder( // 17
-comBuilder(4,6,List(0, 2, 1, 3)), // XX(XX)
-comBuilder(4,2,List(3, 0, 1)), // XXX
+argBuilder(2, true),
+comBuilder(2,0),
+ptrBuilder(0, true, true),
 ),
 appBuilder( // 18
-comBuilder(4,5,List(0, 1, 3, 2)), // X(XX)X
-comBuilder(4,30,List(0, 2, 1, 2, 3, 3)), // XX(XXX)X
-comBuilder(5,39,List(0, 3, 1, 4, 2, 4)), // XX(XX)(XX)
-ptrBuilder(17),
+comBuilder(4,14),
+argBuilder(0, true),
+argBuilder(1, true),
 ),
+// AExp10
 appBuilder( // 19
-comBuilder(5,16,List(4, 0, 1, 2, 3)), // XX(XXX)
-comBuilder(2,0,List(0)), // X
-ptrBuilder(18),
+yBuilder(),
+ptrBuilder(0, true, true),
 ),
- // FUN8SumEuler.relprime
 appBuilder( // 20
-comBuilder(5,12,List(0, 1, 3, 4, 2)), // X(XXX)X
-prmBuilder("=="),
-ptrBuilder(21),
-intBuilder(1),
+comBuilder(3,17),
+argBuilder(0, true),
 ),
- // FUN9SumEuler.hcf
+// AExp11
 appBuilder( // 21
-comBuilder(3,5,List(0, 1, 2, 2)), // X(XX)X
-ptrBuilder(23),
-ptrBuilder(22),
+argBuilder(3, true),
+argBuilder(0, true),
+argBuilder(1, true),
 ),
+// AExp12
 appBuilder( // 22
-comBuilder(4,16,List(0, 3, 1, 2, 3)), // XX(XXX)
-ptrBuilder(21),
-ptrBuilder(24),
+comBuilder(2,78),
+intBuilder(1),
+ptrBuilder(0, true, true),
 ),
 appBuilder( // 23
-comBuilder(5,28,List(0, 1, 4, 2, 4, 3)), // XXX(XX)X
-prmBuilder("=="),
-intBuilder(0),
+prmBuilder("-"),
+argBuilder(0, true),
+intBuilder(1),
 ),
- // FUN10NanoPrelude.mod
+// AExp13
 appBuilder( // 24
-comBuilder(4,4,List(0, 2, 3, 1)), // XXXX
-ptrBuilder(25),
-comBuilder(2,0,List(1)), // X
+comBuilder(1,40),
+ptrBuilder(1, true, true),
+ptrBuilder(0, true, true),
 ),
- // FUN11NanoPrelude.divMod
 appBuilder( // 25
-comBuilder(5,19,List(0, 1, 2, 4, 3)), // X(X(XX)X)
-yBuilder(),
-comBuilder(4,42,List(0, 2, 3, 1, 3, 3)), // XXX(XXX)
-ptrBuilder(38),
-prmBuilder("+"),
+comBuilder(1,22),
+argBuilder(0, false),
 ),
 appBuilder( // 26
-comBuilder(2,2,List(0, 1, 1)), // XXX
-prmBuilder("+"),
+comBuilder(2,42),
+argBuilder(0, false),
 ),
+// AExp14
 appBuilder( // 27
-comBuilder(3,2,List(0, 2, 1)), // XXX
-prmBuilder("-"),
+ptrBuilder(3, false, false),
+ptrBuilder(0, true, true),
 ),
 appBuilder( // 28
-comBuilder(6,40,List(5, 0, 4, 1, 2, 3)), // X(XXX)(XX)
-prmBuilder("+"),
-intBuilder(1),
+comBuilder(1,24),
+argBuilder(0, true),
 ),
+// AExp15
 appBuilder( // 29
-comBuilder(5,42,List(0, 2, 3, 1, 3, 4)), // XXX(XXX)
-prmBuilder("<="),
-comBuilder(3,2,List(2, 1, 0)), // XXX
+argBuilder(0, true),
+ptrBuilder(0, true, true),
 ),
 appBuilder( // 30
-comBuilder(5,45,List(0, 1, 4, 2, 3, 4)), // X(XX)(X(XX))
-comBuilder(4,42,List(0, 3, 2, 1, 3, 2)), // XXX(XXX)
-ptrBuilder(29),
-ptrBuilder(28),
-ptrBuilder(27),
+prmBuilder("+"),
+argBuilder(1, true),
+intBuilder(1),
 ),
+// AExp16
 appBuilder( // 31
-comBuilder(4,6,List(0, 2, 1, 3)), // XX(XX)
-ptrBuilder(30),
-ptrBuilder(26),
+argBuilder(2, true),
+argBuilder(1, false),
+ptrBuilder(0, true, true),
 ),
 appBuilder( // 32
-comBuilder(4,6,List(1, 3, 0, 2)), // XX(XX)
-ptrBuilder(31),
+comBuilder(3,29),
+argBuilder(0, true),
+argBuilder(1, false),
 ),
+// AExp17
 appBuilder( // 33
-comBuilder(5,16,List(4, 0, 1, 2, 3)), // XX(XXX)
-intBuilder(1),
-prmBuilder("-"),
+comBuilder(4,21),
+argBuilder(1, true),
+ptrBuilder(0, true, true),
 ),
 appBuilder( // 34
-comBuilder(3,2,List(2, 0, 1)), // XXX
-intBuilder(0),
+argBuilder(0, true),
+argBuilder(2, true),
 ),
+// AExp18
 appBuilder( // 35
-comBuilder(5,37,List(0, 4, 3, 1, 2, 4)), // XXXX(XX)
-prmBuilder("<="),
+argBuilder(0, true),
+argBuilder(2, false),
+ptrBuilder(1, true, true),
+ptrBuilder(0, true, true),
 ),
 appBuilder( // 36
-comBuilder(4,29,List(0, 1, 3, 2, 3, 3)), // X(XX)(XX)X
-ptrBuilder(35),
-ptrBuilder(34),
-ptrBuilder(33),
+comBuilder(3,33),
+argBuilder(1, false),
+argBuilder(2, false),
+argBuilder(3, false),
 ),
 appBuilder( // 37
-comBuilder(5,37,List(0, 4, 1, 2, 3, 4)), // XXXX(XX)
-prmBuilder("<="),
+argBuilder(1, false),
+argBuilder(3, false),
 ),
+// AExp19
 appBuilder( // 38
-comBuilder(5,29,List(0, 1, 4, 2, 4, 3)), // X(XX)(XX)X
-comBuilder(5,44,List(0, 1, 4, 2, 3, 4)), // X(XX)(XXX)
-ptrBuilder(37),
-ptrBuilder(36),
-ptrBuilder(32),
+argBuilder(2, true),
+comBuilder(2,0),
+ptrBuilder(0, true, true),
 ),
- // FUN12NanoPrelude.enumFromTo
 appBuilder( // 39
-comBuilder(5,15,List(0, 1, 4, 2, 3)), // X(XX)(XX)
-ptrBuilder(41),
-ptrBuilder(40),
-ptrBuilder(45),
+comBuilder(4,35),
+argBuilder(0, true),
+argBuilder(1, true),
 ),
+// AExp20
 appBuilder( // 40
-comBuilder(3,2,List(0, 2, 1)), // XXX
-prmBuilder("<="),
-),
- // FUN13NanoPrelude.takeWhile
-appBuilder( // 41
-comBuilder(3,3,List(0, 1, 2)), // X(XX)
 yBuilder(),
-ptrBuilder(44),
+ptrBuilder(0, true, true),
 ),
+appBuilder( // 41
+comBuilder(3,38),
+argBuilder(0, true),
+),
+// AExp21
 appBuilder( // 42
-comBuilder(4,6,List(0, 2, 1, 3)), // XX(XX)
-comBuilder(4,2,List(3, 0, 1)), // XXX
+prmBuilder("=="),
+ptrBuilder(0, true, true),
+intBuilder(1),
 ),
 appBuilder( // 43
-comBuilder(5,42,List(1, 3, 0, 2, 3, 4)), // XXX(XXX)
-comBuilder(2,0,List(0)), // X
+comBuilder(2,46),
+argBuilder(0, true),
+argBuilder(1, true),
 ),
+// AExp22
 appBuilder( // 44
-comBuilder(6,48,List(5, 0, 1, 3, 2, 4)), // XX(XX(XX))
-comBuilder(2,0,List(0)), // X
-ptrBuilder(43),
-ptrBuilder(42),
+comBuilder(2,46),
+argBuilder(1, false),
+ptrBuilder(0, true, true),
 ),
- // FUN14NanoPrelude.enumFrom
 appBuilder( // 45
-comBuilder(5,49,List(0, 4, 1, 2, 4, 3)), // XX(X(XXX))
-comBuilder(4,2,List(3, 0, 1)), // XXX
-ptrBuilder(45),
-prmBuilder("+"),
+comBuilder(2,48),
+argBuilder(0, true),
+argBuilder(1, false),
+),
+// AExp23
+appBuilder( // 46
+prmBuilder("=="),
+intBuilder(0),
+argBuilder(1, false),
+ptrBuilder(0, true, true),
+argBuilder(0, false),
+),
+appBuilder( // 47
+comBuilder(2,44),
+argBuilder(0, false),
+argBuilder(1, false),
+),
+// AExp24
+appBuilder( // 48
+comBuilder(1,72),
+argBuilder(0, true),
+argBuilder(1, true),
+comBuilder(2,1),
+),
+// AExp25
+appBuilder( // 49
+prmBuilder("<="),
+argBuilder(5, false),
+argBuilder(1, false),
+ptrBuilder(1, true, true),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 50
+argBuilder(3, true),
+argBuilder(5, false),
+),
+appBuilder( // 51
+prmBuilder("<="),
+argBuilder(4, true),
+argBuilder(1, false),
+argBuilder(0, true),
+argBuilder(2, true),
+),
+// AExp26
+appBuilder( // 52
+argBuilder(1, true),
+intBuilder(0),
+argBuilder(0, true),
+),
+// AExp27
+appBuilder( // 53
+argBuilder(2, true),
 intBuilder(1),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 54
+prmBuilder("-"),
+argBuilder(0, true),
+argBuilder(1, true),
+),
+// AExp28
+appBuilder( // 55
+argBuilder(2, true),
+argBuilder(1, true),
+argBuilder(0, true),
+),
+// AExp29
+appBuilder( // 56
+argBuilder(3, true),
+ptrBuilder(1, true, true),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 57
+prmBuilder("-"),
+argBuilder(1, true),
+argBuilder(0, true),
+),
+appBuilder( // 58
+prmBuilder("+"),
+argBuilder(2, true),
+intBuilder(1),
+),
+// AExp30
+appBuilder( // 59
+prmBuilder("<="),
+argBuilder(0, false),
+argBuilder(2, false),
+ptrBuilder(1, true, true),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 60
+comBuilder(4,56),
+argBuilder(0, false),
+argBuilder(2, false),
+argBuilder(1, false),
+),
+appBuilder( // 61
+comBuilder(3,55),
+argBuilder(2, false),
+argBuilder(1, false),
+),
+// AExp31
+appBuilder( // 62
+prmBuilder("+"),
+argBuilder(0, false),
+argBuilder(0, false),
+),
+// AExp32
+appBuilder( // 63
+comBuilder(3,59),
+argBuilder(0, true),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 64
+comBuilder(1,62),
+argBuilder(1, true),
+),
+// AExp33
+appBuilder( // 65
+argBuilder(0, true),
+argBuilder(2, true),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 66
+comBuilder(2,63),
+argBuilder(1, true),
+),
+// AExp34
+appBuilder( // 67
+comBuilder(6,49),
+ptrBuilder(3, true, true),
+argBuilder(0, false),
+ptrBuilder(2, true, true),
+ptrBuilder(1, true, true),
+argBuilder(2, false),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 68
+prmBuilder("+"),
+argBuilder(2, false),
+argBuilder(2, false),
+),
+appBuilder( // 69
+comBuilder(3,65),
+argBuilder(1, true),
+argBuilder(2, false),
+),
+appBuilder( // 70
+comBuilder(3,53),
+argBuilder(0, false),
+argBuilder(2, false),
+),
+appBuilder( // 71
+comBuilder(2,52),
+argBuilder(0, false),
+),
+// AExp35
+appBuilder( // 72
+yBuilder(),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 73
+comBuilder(3,67),
+argBuilder(0, true),
+),
+// AExp36
+appBuilder( // 74
+comBuilder(2,78),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 75
+prmBuilder("+"),
+argBuilder(0, true),
+intBuilder(1),
+),
+// AExp37
+appBuilder( // 76
+comBuilder(4,21),
+argBuilder(0, false),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 77
+comBuilder(1,74),
+argBuilder(0, false),
+argBuilder(1, true),
+),
+// AExp38
+appBuilder( // 78
+prmBuilder("<="),
+argBuilder(0, false),
+argBuilder(1, false),
+comBuilder(2,0),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 79
+comBuilder(2,76),
+argBuilder(0, false),
+argBuilder(1, false),
 ),
 )
 }

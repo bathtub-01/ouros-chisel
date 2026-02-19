@@ -108,7 +108,7 @@ class DrfHeap extends Module {
     val out_sub       = Decoupled(new ActiveApp)
     val out_big_drf   = Decoupled(new FrozenApp)
     val free_addr     = Output(Addr)
-    val addr_consumed = Input(UInt(2.W))
+    val addr_consumed = Input(UInt(3.W))
     val search        = Output(Addr)
     val found         = Input(Bool())
     // ============ non-essential ports ===================
@@ -644,7 +644,7 @@ class DrfHeap extends Module {
 
   // program injection & start/end control
   when(!busy && io.inject.valid) {
-    mainHeap.writeA(mkHeapCell(true.B, io.inject.bits), regAddrBumper)
+    mainHeap.writeB(mkHeapCell(true.B, io.inject.bits), regAddrBumper)
     regAddrBumper := regAddrBumper + 1.U
   }
 
