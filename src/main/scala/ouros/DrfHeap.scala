@@ -112,9 +112,10 @@ class DrfHeap extends Module {
     val search        = Output(Addr)
     val found         = Input(Bool())
     // ============ non-essential ports ===================
-    val inject = Flipped(Valid(Vec(maxAppLen, new Atom)))
-    val start  = Input(Bool())
-    val done   = Output(Bool())
+    val inject   = Flipped(Valid(Vec(maxAppLen, new Atom)))
+    val start    = Input(Bool())
+    val done     = Output(Bool())
+    val thread_2 = Output(UInt(10.W))
   })
 
   val busy         = RegInit(false.B)
@@ -154,6 +155,7 @@ class DrfHeap extends Module {
   // connect Vec of ports to underlying moduels
   threadStacks.zip(_threadStacks).foreach { case (p, m) => p :<>= m.io }
   frameStacks.zip(_frameStacks).foreach { case (p, m) => p :<>= m.io }
+  io.thread_2 := threadStacks(2).elms
 
   def mkHeapCell(exist: Bool, app: Vec[Atom]): HeapCell = {
     val wire = Wire(new HeapCell)

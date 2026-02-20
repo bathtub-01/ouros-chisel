@@ -189,6 +189,10 @@ class Reducer extends Module {
         }.otherwise {
           stepNext()
         }
+      }.otherwise {
+        combTable.read(
+          regIn.app(0).getCombAddr() + regSpine(regIdx).getPtr() + 1.U
+        )
       }
     }
     is(ReducerStm.SPECIAL) {
