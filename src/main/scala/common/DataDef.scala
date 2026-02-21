@@ -95,6 +95,19 @@ class Atom extends Bundle {
   def isPrm(): Bool = this.atomType === AtomType.PRM
   def isArg(): Bool = this.atomType === AtomType.ARG
 
+  /** whether this is a unique PTR */
+  def isUnique(): Bool = this.isPtr() && this.toPtr().unique
+
+  /** clear the unique flag if this is a PTR */
+  def dash(): Atom = {
+    val wire = WireInit(this)
+    when(this.isPtr()) {
+      val ptr = this.toPtr()
+      wire := makePtr(false.B, ptr.pointer)
+    }
+    wire
+  }
+
   /** assume this Atom is a COM */
   def getCombAddr(): UInt = this.payload.asTypeOf(new ComPayload).pointer
 

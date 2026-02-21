@@ -200,7 +200,7 @@ class Reducer extends Module {
       io.out_spine.bits  := {
         val resSpine = WireInit(0.U.asTypeOf(new ActiveApp))
         resSpine        := regIn
-        resSpine.app(0) := regIn.app(1)
+        resSpine.app(0) := regIn.app(1).dash()
         resSpine.app(1) := makePtr(false.B, regAddr)
         resSpine
       }
@@ -208,7 +208,7 @@ class Reducer extends Module {
       io.out_app.bits  := {
         val outApp = WireInit(0.U.asTypeOf(new FrozenApp))
         outApp.heap_addr := regAddr
-        outApp.app(0)    := regIn.app(1)
+        outApp.app(0)    := regIn.app(1).dash()
         outApp.app(1)    := makePtr(false.B, regAddr)
         outApp
       }

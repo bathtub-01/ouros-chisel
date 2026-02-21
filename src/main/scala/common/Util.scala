@@ -16,6 +16,18 @@ class BitsWithValid[T <: Data](t: T) extends Bundle {
 
 object Helper {
 
+  /** Cancel all the unique flags in an App */
+  def dashApp(app: Vec[Atom]): Vec[Atom] = {
+    val res = WireInit(app)
+    res.zip(app).foreach { case (r, atom) =>
+      when(atom.isPtr()) {
+        val ptr = atom.toPtr()
+        r := makePtr(false.B, ptr.pointer)
+      }
+    }
+    res
+  }
+
   /**
    * Dereference `app`'s PTR at position `arg_id`, with `target`
    *   - when returning `(app, _, false.B)`, `app` is the deref result
@@ -30,12 +42,19 @@ object Helper {
       target: Vec[Atom],
       free_addr: UInt
   ): (Vec[Atom], Vec[Atom], Bool) = {
+    val targetDashed = {
+      val wire = WireInit(target)
+      when(!app(0).isUnique()) {
+        wire := dashApp(target)
+      }
+      wire
+    }
     val targetLen = appLen(target)
     val res       = WireInit(0.U.asTypeOf(Vec(2 * maxAppLen - 1, new Atom)))
     when(arg_id === 0.U) {
       for (i <- 0 until res.length) {
         when(i.U < targetLen) {
-          res(i) := target(i.U)
+          res(i) := targetDashed(i.U)
         }.elsewhen(i.U - targetLen + 1.U < maxAppLen.U) {
           res(i) := app(i.U - targetLen + 1.U)
         }

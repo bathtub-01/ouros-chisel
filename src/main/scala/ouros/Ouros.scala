@@ -31,7 +31,7 @@ class Ouros extends Module {
     val inject_to = Input(InjectTo())
     val inject    = Flipped(Valid(Vec(maxAppLen, new Atom)))
     val done      = Output(Bool())
-    val thread_2  = Output(UInt(10.W))
+    val deallc    = Output(Addr)
   })
 
   def getDest(app: Vec[Atom]): Dest.Type = {
@@ -56,7 +56,6 @@ class Ouros extends Module {
   val dheap  = Module(new DrfHeap)
   val reducr = Module(new Reducer)
   val alu    = Module(new Alu(pipelined = AluPipe))
-  io.thread_2 := dheap.io.thread_2
 
   val wireToDheapA0 = wireGen
   val wireToDheapA1 = wireGen
@@ -72,6 +71,7 @@ class Ouros extends Module {
   val wireToAlu1 = wireGen
   val wireToAlu2 = wireGen
 
+  io.deallc                 := dheap.io.deallc
   dheap.io.out_main.ready   := false.B
   dheap.io.out_sub.ready    := false.B
   reducr.io.out_spine.ready := false.B

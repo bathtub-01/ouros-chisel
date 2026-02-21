@@ -112,10 +112,10 @@ class DrfHeap extends Module {
     val search        = Output(Addr)
     val found         = Input(Bool())
     // ============ non-essential ports ===================
-    val inject   = Flipped(Valid(Vec(maxAppLen, new Atom)))
-    val start    = Input(Bool())
-    val done     = Output(Bool())
-    val thread_2 = Output(UInt(10.W))
+    val deallc = Output(Addr)
+    val inject = Flipped(Valid(Vec(maxAppLen, new Atom)))
+    val start  = Input(Bool())
+    val done   = Output(Bool())
   })
 
   val busy         = RegInit(false.B)
@@ -155,7 +155,6 @@ class DrfHeap extends Module {
   // connect Vec of ports to underlying moduels
   threadStacks.zip(_threadStacks).foreach { case (p, m) => p :<>= m.io }
   frameStacks.zip(_frameStacks).foreach { case (p, m) => p :<>= m.io }
-  io.thread_2 := threadStacks(2).elms
 
   def mkHeapCell(exist: Bool, app: Vec[Atom]): HeapCell = {
     val wire = Wire(new HeapCell)
@@ -228,7 +227,7 @@ class DrfHeap extends Module {
   def writeIncoming(): Unit = {
     incomingStk.pop()
     mainHeap.writeA(
-      mkHeapCell(true.B, io.in_main.bits.app),
+      mkHeapCell(true.B, dashApp(io.in_main.bits.app)),
       incomingStk.top.addr
     )
   }
@@ -271,25 +270,13 @@ class DrfHeap extends Module {
 
   def putOutputSub(): Unit = {
     val dmd = findDmdStk()
-    val app = extendToApp(regInSub.app)
+    val app = dashApp(extendToApp(regInSub.app))
     io.out_sub.valid := true.B
     io.out_sub.bits  := Helper.mkActiveApp(dmd, app)
   }
 
-  def writeBack(useB: Boolean): Unit = {
-    if (!useB) {
-      mainHeap.writeA(mkHeapCell(true.B, regInMain.app), regAddr)
-    } else {
-      mainHeap.writeB(mkHeapCell(true.B, regInMain.app), regAddr)
-    }
-  }
-
-  def writeBackBigDrf(app: Vec[Atom], port: Bool): Unit = {
-    when(!port) {
-      mainHeap.writeA(mkHeapCell(true.B, app), currentStk.top.addr)
-    }.otherwise {
-      mainHeap.writeB(mkHeapCell(true.B, app), currentStk.top.addr)
-    }
+  def writeBack(): Unit = {
+    mainHeap.writeB(mkHeapCell(true.B, dashApp(regInMain.app)), regAddr)
   }
 
   def pushTarget(new_frame: Bool): Unit = {
@@ -440,6 +427,25 @@ class DrfHeap extends Module {
     wire
   }
 
+  def canAvoidUpdate: Bool = {
+    val wire = WireInit(false.B)
+    switch(mainHeap.readOutA.app(0).atomType) {
+      is(AtomType.PTR) {
+        wire := mainHeap.readOutA.app(0).isUnique()
+      }
+      is(AtomType.PRM) {
+        when(mainHeap.readOutA.app(1).isPtr()) {
+          wire := mainHeap.readOutA.app(1).isUnique()
+        }.otherwise {
+          when(mainHeap.readOutA.app(2).isPtr()) {
+            wire := mainHeap.readOutA.app(2).isUnique()
+          }
+        }
+      }
+    }
+    wire
+  }
+
   // consume the next input
   def nextMain(): Unit = {
     io.in_main.ready := true.B
@@ -514,7 +520,6 @@ class DrfHeap extends Module {
         stmMain := Stm.RESUME
       }
       is(WHNFs.NoNewFrame) {
-        bBorrowed := true.B
         val stkId: UInt =
           firstWhereC(threadStacks) { s =>
             s.elms >= 1.U && s.top.addr === regAddr
@@ -523,7 +528,13 @@ class DrfHeap extends Module {
           threadStacks(stkId).pop()
           frameStacks(stkId).pop()
         }
-        writeBack(true) // TODO avoid update here
+        when(canAvoidUpdate) {
+          io.deallc := regAddr
+          bBorrowed := false.B
+        }.otherwise {
+          bBorrowed := true.B
+          writeBack()
+        }
         nextMain()
       }
     }
@@ -560,7 +571,16 @@ class DrfHeap extends Module {
       }
       is(IAs1.ExistIAWorkingNewFrame) { /* do nothing here */ }
       is(IAs1.ExistIAFresh) {
-        putOutputMain(regInMain.stack_idx, target)
+        putOutputMain(
+          regInMain.stack_idx, {
+            // dash when shared
+            val wire = WireInit(mainHeap.readOutA.app)
+            when(!dmder(regArgId).isUnique()) {
+              wire := dashApp(mainHeap.readOutA.app)
+            }
+            wire
+          }
+        )
         pushTarget(false.B)
       }
     }
@@ -595,7 +615,7 @@ class DrfHeap extends Module {
 
   def stepRESUME(): Unit = {
     bBorrowed := true.B
-    writeBack(true)
+    writeBack()
     switch(genRESUMEs) {
       is(RESUMEs.TopInWHNF) {
         regInMain.app := mainHeap.readOutA.app
@@ -641,6 +661,7 @@ class DrfHeap extends Module {
   io.out_big_drf.bits  := DontCare
   io.free_addr         := regAddrBumper
   io.search            := DontCare
+  io.deallc            := 0.U
   regAddrBumper        := regAddrBumper + io.addr_consumed + needSplit.asUInt
   regSubMask           := false.B
 
