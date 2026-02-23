@@ -10,6 +10,7 @@ import ouros._
 object Main extends App with ChiselSim {
   def runBenchmark(benchmark: Benchmark, dut: Ouros): Int = {
     var cycles: Int = -1 // one cycle for loading `main`
+    cycles += 7 // compensate for the simulator
     dut.clock.step(3)
     // ====== program injection =======
     dut.io.inject.valid.poke(true.B)
