@@ -4,7 +4,6 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.BundleLiterals._
 import chisel3.experimental.VecLiterals._
-import chisel3.util.experimental.loadMemoryFromFileInline
 import _root_.circt.stage.ChiselStage
 
 import common._
@@ -137,7 +136,6 @@ class DrfHeap extends Module {
       Module(new RegStack(frameStkDepth, Vec(maxThreads, Addr)))
     )
   val mainHeap      = Module(new DualPortBlockMem(heapSize, new HeapCell))
-  val demandHeap    = Module(new DualPortBlockMem(heapSize, Bool()))
   val workingHeap   = Module(new DualPortBlockMem(heapSize, Bool()))
   val regBusy       = RegInit(false.B)
   val regAddrBumper = RegInit(0.U.asTypeOf(Addr))
@@ -235,7 +233,6 @@ class DrfHeap extends Module {
   def readTarget(p: UInt): Unit = {
     mainHeap.readA(p)
     workingHeap.readA(p)
-    demandHeap.writeA(true.B, p)
     regAddr := p
   }
 
@@ -266,13 +263,6 @@ class DrfHeap extends Module {
   def putOutputMain(stk_idx: UInt, app: Vec[Atom]): Unit = {
     io.out_main.valid := true.B
     io.out_main.bits  := Helper.mkActiveApp(stk_idx, app)
-  }
-
-  def putOutputSub(): Unit = {
-    val dmd = findDmdStk()
-    val app = dashApp(extendToApp(regInSub.app))
-    io.out_sub.valid := true.B
-    io.out_sub.bits  := Helper.mkActiveApp(dmd, app)
   }
 
   def writeBack(): Unit = {
@@ -408,25 +398,6 @@ class DrfHeap extends Module {
     wire
   }
 
-  // generate the WORKs signal under current state
-  def genWORKs: WORKs.Type = {
-    val wire = Wire(WORKs())
-    when(demandHeap.readOutB && !regSubMask) {
-      when(
-        threadStacks.exists(stk =>
-          stk.elms >= 1.U && stk.top.addr === regInSub.heap_addr
-        )
-      ) {
-        wire := WORKs.DmderFound
-      }.otherwise {
-        wire := WORKs.DmderNotFound
-      }
-    }.otherwise {
-      wire := WORKs.NotDemanded
-    }
-    wire
-  }
-
   def canAvoidUpdate: Bool = {
     val wire = WireInit(false.B)
     switch(mainHeap.readOutA.app(0).atomType) {
@@ -444,6 +415,22 @@ class DrfHeap extends Module {
       }
     }
     wire
+  }
+
+  def beingWaited: (Bool, UInt) = {
+    val wireB = Wire(Bool())
+    val wireI = Wire(UInt(log2Ceil(maxThreads).W))
+    val addr  = io.in_sub.bits.heap_addr
+    when(stmMain === Stm.IA && genIAs1 === IAs1.NoExist && regAddr === addr) {
+      wireB := true.B
+      wireI := regInMain.stack_idx
+    }.otherwise {
+      def isWaiting(stk: StackPort[StkCell]): Bool =
+        stk.elms >= 1.U && stk.top.addr === addr
+      wireB := threadStacks.exists(isWaiting(_))
+      wireI := threadStacks.indexWhere(isWaiting(_))
+    }
+    (wireB, wireI)
   }
 
   // consume the next input
@@ -476,29 +463,6 @@ class DrfHeap extends Module {
         writeIncoming()
         stmMain := Stm.IDLE
       }
-    }
-  }
-
-  // consume the next input
-  def nextSub(): Unit = {
-    io.in_sub.ready := io.out_sub.ready && !bBorrowed
-    val addr = io.in_sub.bits.heap_addr
-    when(io.in_sub.fire) {
-      mainHeap.writeB(
-        mkHeapCell(true.B, extendToApp(io.in_sub.bits.app)),
-        addr
-      )
-      regInSub := io.in_sub.bits
-      when(
-        demandHeap.io.readwritePorts(0).address === addr &&
-          demandHeap.io.readwritePorts(0).enable
-      ) {
-        regSubMask := true.B
-      }
-      demandHeap.readB(addr)
-      stmSub := StmSub.WORK
-    }.otherwise {
-      stmSub := StmSub.IDLE
     }
   }
 
@@ -630,26 +594,10 @@ class DrfHeap extends Module {
     }
   }
 
-  def stepWORK(): Unit = {
-    switch(genWORKs) {
-      is(WORKs.NotDemanded) {
-        nextSub()
-      }
-      is(WORKs.DmderFound) {
-        putOutputSub()
-        nextSub()
-      }
-      is(WORKs.DmderNotFound) {
-        demandHeap.readB(regInSub.heap_addr)
-      }
-    }
-  }
-
   // give default connection
   threadStacks.foreach(s => s.init())
   frameStacks.foreach(s => s.init())
   mainHeap.init()
-  demandHeap.init()
   workingHeap.init()
   io.in_main.ready     := false.B
   io.in_sub.ready      := false.B
@@ -700,9 +648,15 @@ class DrfHeap extends Module {
       is(Stm.RESUME) { stepRESUME() }
     }
 
-    switch(stmSub) {
-      is(StmSub.IDLE) { nextSub() }
-      is(StmSub.WORK) { stepWORK() }
+    io.in_sub.ready           := !bBorrowed
+    io.out_sub.valid          := io.in_sub.fire && beingWaited._1
+    io.out_sub.bits.stack_idx := beingWaited._2
+    io.out_sub.bits.app       := dashApp(io.in_sub.bits.app)
+    when(io.in_sub.fire) {
+      mainHeap.writeB(
+        mkHeapCell(true.B, io.in_sub.bits.app),
+        io.in_sub.bits.heap_addr
+      )
     }
   }
 }

@@ -65,11 +65,11 @@ object Main extends App with ChiselSim {
       Permsort,
       Queens,
       Queens2,
+      SumEuler,
       Sumpuz,
       Taut,
       Whilex,
-      SumEuler,
-      TreeSum,
+      // TreeSum,
     )
   )
 }
