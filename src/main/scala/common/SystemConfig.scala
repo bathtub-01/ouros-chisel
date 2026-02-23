@@ -32,6 +32,8 @@ object SystemConfig {
   /** thread resource in a core (number of stacks) */
   val maxThreads = 4
 
+  val bufferSize = maxThreads
+
   /** depth of the thread stack in DrfHeap */
   val threadStkDepth = 512 // 256
 

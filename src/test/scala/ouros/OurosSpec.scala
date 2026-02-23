@@ -78,7 +78,7 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     )
   }
 
-  inspect(Fib)
+  inspect(SumEuler)
   // quickBenchmarks()
   // fullBenchmarks()
 }

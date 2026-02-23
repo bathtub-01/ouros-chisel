@@ -108,25 +108,25 @@ class Ouros extends Module {
       .otherwise { wireToReducr2 :<>= alu.io.out }
   }
 
-  val bufferDheapA0 = Queue(wireToDheapA0, maxThreads + 1) // from dheap.main
-  val bufferDheapA1 = Queue(wireToDheapA1, maxThreads + 1) // from reducer
-  val bufferDheapA2 = Queue(wireToDheapA2, maxThreads + 1) // from alu
-  val bufferDheapA3 = Queue(wireToDheapA3, maxThreads + 1) // from dheap.sub
+  val bufferDheapA0 = Queue(wireToDheapA0, bufferSize) // from dheap.main
+  val bufferDheapA1 = Queue(wireToDheapA1, bufferSize) // from reducer
+  val bufferDheapA2 = Queue(wireToDheapA2, bufferSize) // from alu
+  val bufferDheapA3 = Queue(wireToDheapA3, bufferSize) // from dheap.sub
   val arbiterDheapA = Module(new Arbiter(new ActiveApp, 4))
 
-  val bufferDheapB0 = Queue(reducr.io.out_app, maxThreads + 1) // from reducer
-  val bufferDheapB1 = Queue(dheap.io.out_big_drf, maxThreads + 1)
+  val bufferDheapB0 = Queue(reducr.io.out_app, bufferSize) // from reducer
+  val bufferDheapB1 = Queue(dheap.io.out_big_drf, bufferSize)
   val arbiterDheapB = Module(new Arbiter(new FrozenApp, 2))
 
-  val bufferReducr0 = Queue(wireToReducr0, maxThreads + 1) // from reducer
-  val bufferReducr1 = Queue(wireToReducr1, maxThreads + 1) // from dheap.main
-  val bufferReducr2 = Queue(wireToReducr2, maxThreads + 1) // from alu
-  val bufferReducr3 = Queue(wireToReducr3, maxThreads + 1) // from dheap.sub
+  val bufferReducr0 = Queue(wireToReducr0, bufferSize) // from reducer
+  val bufferReducr1 = Queue(wireToReducr1, bufferSize) // from dheap.main
+  val bufferReducr2 = Queue(wireToReducr2, bufferSize) // from alu
+  val bufferReducr3 = Queue(wireToReducr3, bufferSize) // from dheap.sub
   val arbiterReducr = Module(new Arbiter(new ActiveApp, 4))
 
-  val bufferAlu0 = Queue(wireToAlu0, maxThreads + 1) // from reducer
-  val bufferAlu1 = Queue(wireToAlu1, maxThreads + 1) // from dheap.main
-  val bufferAlu2 = Queue(wireToAlu2, maxThreads + 1) // from dheap.sub
+  val bufferAlu0 = Queue(wireToAlu0, bufferSize) // from reducer
+  val bufferAlu1 = Queue(wireToAlu1, bufferSize) // from dheap.main
+  val bufferAlu2 = Queue(wireToAlu2, bufferSize) // from dheap.sub
   val arbiterAlu = Module(new Arbiter(new ActiveApp, 3))
 
   // buffers -> arbiters
