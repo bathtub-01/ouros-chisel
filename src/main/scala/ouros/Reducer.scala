@@ -28,6 +28,8 @@ class Reducer extends Module {
     val out_app       = Decoupled(new FrozenApp)
     val addr_consumed = Output(UInt(3.W))
     val need_split    = Input(Bool())
+    // val search        = Input(Addr)
+    val found = Output(Bool())
     // ============ non-essential ports ===================
     val inject = Flipped(Valid(Vec(maxAppLen, new Atom)))
   })
@@ -69,29 +71,11 @@ class Reducer extends Module {
     val idx  = UInt(3.W)
   }
 
-  def moreApp(app: Vec[Atom]): Bool = {
-    val zipWithIndex = VecInit(
-      app.zipWithIndex.map { case (elem, i) =>
-        val pair = Wire(new Pair)
-        pair.atom := elem
-        pair.idx  := i.U
-        pair
-      }
-    )
-    zipWithIndex.exists(p => p.idx > regIdx && isNested(p.atom))
-  }
+  def moreApp(app: Vec[Atom]): Bool =
+    zipWithIndex(app).exists(p => p.idx > regIdx && isNested(p.bits))
 
-  def findApp(app: Vec[Atom]): UInt = {
-    val zipWithIndex = VecInit(
-      app.zipWithIndex.map { case (elem, i) =>
-        val pair = Wire(new Pair)
-        pair.atom := elem
-        pair.idx  := i.U
-        pair
-      }
-    )
-    zipWithIndex.indexWhere(p => p.idx > regIdx && isNested(p.atom))
-  }
+  def findApp(app: Vec[Atom]): UInt =
+    zipWithIndex(app).indexWhere(p => p.idx > regIdx && isNested(p.bits))
 
   def isNested(atom: Atom): Bool = {
     val res = WireInit(false.B)
@@ -137,6 +121,7 @@ class Reducer extends Module {
   io.out_app.bits    := DontCare
   io.out_app.valid   := false.B
   io.addr_consumed   := 0.U
+  io.found           := false.B
 
   // program injection
   when(io.inject.valid) {
@@ -213,10 +198,13 @@ class Reducer extends Module {
         outApp
       }
       regAppMask := false.B
-      when(io.out_app.ready) {
+      when(regAppMask) {
         io.addr_consumed := 1.U
+      }
+      when(io.out_app.ready) {
         stepNext()
       }
+      // io.found := io.search === regAddr
     }
   }
 }

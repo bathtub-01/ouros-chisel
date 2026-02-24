@@ -384,6 +384,24 @@ object Helper {
     wire.app       := app
     wire
   }
+
+  class Pair[T <: Data](t: T, w: Width) extends Bundle {
+    val bits = t
+    val idx  = UInt(w)
+  }
+
+  def zipWithIndex[T <: Data](vec: Vec[T], t: T): Vec[Pair[T]] =
+    VecInit(
+      vec.zipWithIndex.map { case (bits, idx) =>
+        val pair = Wire(new Pair(t, log2Ceil(vec.length).W))
+        pair.bits := bits
+        pair.idx  := idx.U
+        pair
+      }
+    )
+
+  def zipWithIndex[T <: Data](vec: Vec[T]): Vec[Pair[T]] =
+    zipWithIndex(vec, chiselTypeOf(vec(0)))
 }
 
 object PrintPTR extends App {
