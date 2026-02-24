@@ -28,8 +28,8 @@ class Reducer extends Module {
     val out_app       = Decoupled(new FrozenApp)
     val addr_consumed = Output(UInt(3.W))
     val need_split    = Input(Bool())
-    // val search        = Input(Addr)
-    val found = Output(Bool())
+    val search        = Input(Addr)
+    val found         = Output(Bool())
     // ============ non-essential ports ===================
     val inject = Flipped(Valid(Vec(maxAppLen, new Atom)))
   })
@@ -179,6 +179,12 @@ class Reducer extends Module {
           regIn.app(0).getCombAddr() + regSpine(regIdx).getPtr() + 1.U
         )
       }
+      io.found := zipWithIndex(regSpine).exists { p =>
+        val ptr = p.bits.toPtr()
+        p.idx >= regIdx && p.bits.isPtr() &&
+        ptr.ncell &&
+        io.search === ptr.pointer + regAddr
+      }
     }
     is(ReducerStm.SPECIAL) {
       io.out_spine.valid := regAppMask
@@ -204,7 +210,7 @@ class Reducer extends Module {
       when(io.out_app.ready) {
         stepNext()
       }
-      // io.found := io.search === regAddr
+      io.found := io.search === regAddr
     }
   }
 }

@@ -31,7 +31,8 @@ class Ouros extends Module {
     val inject_to = Input(InjectTo())
     val inject    = Flipped(Valid(Vec(maxAppLen, new Atom)))
     val done      = Output(Bool())
-    val deallc    = Output(Addr)
+    val noExist   = Output(Bool())
+    val realNon   = Output(Bool())
   })
 
   def getDest(app: Vec[Atom]): Dest.Type = {
@@ -71,7 +72,8 @@ class Ouros extends Module {
   val wireToAlu1 = wireGen
   val wireToAlu2 = wireGen
 
-  io.deallc                 := dheap.io.deallc
+  io.noExist                := dheap.io.non_exist
+  io.realNon                := dheap.io.real_non
   dheap.io.out_main.ready   := false.B
   dheap.io.out_sub.ready    := false.B
   reducr.io.out_spine.ready := false.B
@@ -117,6 +119,8 @@ class Ouros extends Module {
   val bufferDheapB0 = Queue(reducr.io.out_app, bufferSize) // from reducer
   val bufferDheapB1 = Queue(dheap.io.out_big_drf, bufferSize)
   val arbiterDheapB = Module(new Arbiter(new FrozenApp, 2))
+  val ringDheapB0   = Module(new Ring(bufferSize, Addr))
+  val ringDheapB1   = Module(new Ring(bufferSize, Addr))
 
   val bufferReducr0 = Queue(wireToReducr0, bufferSize) // from reducer
   val bufferReducr1 = Queue(wireToReducr1, bufferSize) // from dheap.main
@@ -158,11 +162,22 @@ class Ouros extends Module {
   reducr.io.in     :<>= arbiterReducr.io.out
   alu.io.in        :<>= arbiterAlu.io.out
 
+  // search-found logic
+  reducr.io.search        := dheap.io.search
+  ringDheapB0.io.search   := dheap.io.search
+  ringDheapB0.io.in_fire  := reducr.io.out_app.fire
+  ringDheapB0.io.din      := reducr.io.out_app.bits.heap_addr
+  ringDheapB0.io.out_fire := bufferDheapB0.fire
+  ringDheapB1.io.search   := dheap.io.search
+  ringDheapB1.io.in_fire  := dheap.io.out_big_drf.fire
+  ringDheapB1.io.din      := dheap.io.out_big_drf.bits.heap_addr
+  ringDheapB1.io.out_fire := bufferDheapB1.fire
+  dheap.io.found := reducr.io.found || ringDheapB0.io.found || ringDheapB1.io.found
+
   // gc signals
   reducr.io.free_addr    := dheap.io.free_addr
   dheap.io.addr_consumed := reducr.io.addr_consumed
   reducr.io.need_split   := dheap.io.out_big_drf.valid
-  dheap.io.found         := DontCare
 
   // non-essential ports
   dheap.io.inject.valid  := io.inject_to === InjectTo.Heap && io.inject.valid
