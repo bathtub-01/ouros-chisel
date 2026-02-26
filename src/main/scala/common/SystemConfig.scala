@@ -11,12 +11,6 @@ object SystemConfig {
   /** maximum arity of a structured combinator */
   val comArity = 7
 
-  /** patterns supported by structured combinator */
-  val comPattern = 64
-
-  /** maximum number of holes in a structured combinator */
-  val comIdxs = 6
-
   /**
    * maximum length of an application, require:
    *
@@ -25,6 +19,10 @@ object SystemConfig {
    * maxApplen >= comIdxs
    */
   val maxAppLen = 8
+
+  val consumers_reducer = maxAppLen - 1
+  val consumers_dheap   = 1
+  val consumers: Int    = consumers_reducer + consumers_dheap
 
   /** cells in the heap */
   val heapSize = 256 * 1024 // 2 * 1024
