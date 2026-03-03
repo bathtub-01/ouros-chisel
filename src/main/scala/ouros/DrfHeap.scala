@@ -138,7 +138,7 @@ class DrfHeap extends Module {
       Module(new RegStack(frameStkDepth, Vec(maxThreads, Addr)))
     )
   val mainHeap = Module(
-    new DualPortBlockMem(heapSize, Vec(maxAppLen, new Atom))
+    new DualPortBlkBoxMem(heapSize, Vec(maxAppLen, new Atom), false, false)
   )
   val workingHeap   = Module(new DualPortBlockMem(heapSize, Bool()))
   val regBusy       = RegInit(false.B)

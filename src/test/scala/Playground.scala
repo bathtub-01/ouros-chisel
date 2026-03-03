@@ -12,23 +12,25 @@ class PlaySpec extends AnyFreeSpec with ChiselSim {
       new DualPortBlkBoxMem(
         1024,
         UInt(8.W),
-        getClass.getResource("/mem_init.hex").getPath()
+        true,
+        true,
+        getClass.getResource("/mem_init.hex").getPath(),
       )
     ) { dut =>
-      dut.io(0).enable.poke(true)
-      dut.io(0).wrEna.poke(false)
+      dut.io.readwritePorts(0).enable.poke(true)
+      dut.io.readwritePorts(0).isWrite.poke(false)
       for (i <- 0 until 15) {
-        dut.io(0).addr.poke(i)
+        dut.io.readwritePorts(0).address.poke(i)
         dut.clock.step()
       }
 
-      dut.io(1).enable.poke(true)
-      dut.io(1).wrEna.poke(false)
+      dut.io.readwritePorts(1).enable.poke(true)
+      dut.io.readwritePorts(1).isWrite.poke(false)
       for (i <- 0 until 15) {
-        dut.io(0).addr.poke(i)
-        dut.io(0).wrEna.poke(true)
-        dut.io(0).wrData.poke(42 + i)
-        dut.io(1).addr.poke(i)
+        dut.io.readwritePorts(0).address.poke(i)
+        dut.io.readwritePorts(0).isWrite.poke(true)
+        dut.io.readwritePorts(0).writeData.poke(42 + i)
+        dut.io.readwritePorts(1).address.poke(i)
         dut.clock.step()
       }
     }
