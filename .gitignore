@@ -356,4 +356,5 @@ simu-out/
 
 # gtkwave
 dbg.gtkw
+dbg-play.gtkw
 filter
