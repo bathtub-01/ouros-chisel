@@ -114,33 +114,12 @@ class DualPortBlockMem[T <: Data](depth: Int, t: T) extends Module {
 /**
  * This is stolen from chisel3.util
  */
-class SRAMBlackbox(parameter: CIRCTSRAMParameter)
-    extends FixedIOExtModule(new CIRCTSRAMInterface(parameter))
-    with HasExtModuleInline { self =>
+class SRAMBlackbox(parameter: CIRCTSRAMParameter, init_hex: String)
+    extends FixedIOExtModule(new CIRCTSRAMInterface(parameter)) { self =>
 
   private val verilogInterface: String =
-    (Seq.tabulate(parameter.write)(idx =>
-      Seq(
-        s"// Write Port $idx",
-        s"input [${log2Ceil(parameter.depth) - 1}:0] W${idx}_addr",
-        s"input W${idx}_en",
-        s"input W${idx}_clk",
-        s"input [${parameter.width - 1}:0] W${idx}_data"
-      ) ++
-        Option.when(parameter.masked)(
-          s"input [${parameter.width / parameter.maskGranularity - 1}:0] W${idx}_mask"
-        )
-    ) ++
-      Seq.tabulate(parameter.read)(idx =>
-        Seq(
-          s"// Read Port $idx",
-          s"input [${log2Ceil(parameter.depth) - 1}:0] R${idx}_addr",
-          s"input R${idx}_en",
-          s"input R${idx}_clk",
-          s"output [${parameter.width - 1}:0] R${idx}_data"
-        )
-      ) ++
-      Seq.tabulate(parameter.readwrite)(idx =>
+    (Seq
+      .tabulate(parameter.readwrite)(idx =>
         Seq(
           s"// ReadWrite Port $idx",
           s"input [${log2Ceil(parameter.depth) - 1}:0] RW${idx}_addr",
@@ -153,42 +132,9 @@ class SRAMBlackbox(parameter: CIRCTSRAMParameter)
           .when(parameter.masked)(
             s"input [${parameter.width / parameter.maskGranularity - 1}:0] RW${idx}_wmask"
           )
-      )).flatten.mkString(",\n")
-
-  private val rLogic = Seq
-    .tabulate(parameter.read) { idx =>
-      val prefix = s"R${idx}"
-      Seq(
-        s"reg _${prefix}_en;",
-        s"reg [${log2Ceil(parameter.depth) - 1}:0] _${prefix}_addr;"
-      ) ++
-        Seq(
-          s"always @(posedge ${prefix}_clk) begin // ${prefix}",
-          s"_${prefix}_en <= ${prefix}_en;",
-          s"_${prefix}_addr <= ${prefix}_addr;",
-          s"end // ${prefix}"
-        ) ++
-        Some(
-          s"assign ${prefix}_data = _${prefix}_en ? Memory[_${prefix}_addr] : ${parameter.width}'bx;"
-        )
-    }
-    .flatten
-
-  private val wLogic = Seq
-    .tabulate(parameter.write) { idx =>
-      val prefix = s"W${idx}"
-      Seq(s"always @(posedge ${prefix}_clk) begin // ${prefix}") ++
-        (if (parameter.masked)
-           Seq.tabulate(parameter.width / parameter.maskGranularity)(i =>
-             s"if (${prefix}_en & ${prefix}_mask[${i}]) Memory[${prefix}_addr][${i * parameter.maskGranularity} +: ${parameter.maskGranularity}] <= ${prefix}_data[${(i + 1) * parameter.maskGranularity - 1}:${i * parameter.maskGranularity}];"
-           )
-         else
-           Seq(
-             s"if (${prefix}_en) Memory[${prefix}_addr] <= ${prefix}_data;"
-           )) ++
-        Seq(s"end // ${prefix}")
-    }
-    .flatten
+      ))
+      .flatten
+      .mkString(",\n")
 
   private val rwLogic = Seq
     .tabulate(parameter.readwrite) { idx =>
@@ -196,25 +142,21 @@ class SRAMBlackbox(parameter: CIRCTSRAMParameter)
       Seq(
         s"reg [${log2Ceil(parameter.depth) - 1}:0] _${prefix}_raddr;",
         s"reg _${prefix}_ren;",
-        s"reg _${prefix}_rmode;"
+        s"reg _${prefix}_rmode;",
+        s"reg [${parameter.width - 1}:0] _${prefix}_rdata_rf;"
       ) ++
         Seq(s"always @(posedge ${prefix}_clk) begin // ${prefix}") ++
         Seq(
           s"_${prefix}_raddr <= ${prefix}_addr;",
           s"_${prefix}_ren <= ${prefix}_en;",
-          s"_${prefix}_rmode <= ${prefix}_wmode;"
+          s"_${prefix}_rmode <= ${prefix}_wmode;",
+          s"if (${prefix}_en & ${prefix}_wmode) _${prefix}_rdata_rf <= Memory[${prefix}_addr];",
+          s"if (${prefix}_en & ${prefix}_wmode) Memory[${prefix}_addr] <= ${prefix}_wdata;"
         ) ++
-        (if (parameter.masked)
-           Seq.tabulate(parameter.width / parameter.maskGranularity)(i =>
-             s"if(${prefix}_en & ${prefix}_wmask[${i}] & ${prefix}_wmode) Memory[${prefix}_addr][${i * parameter.maskGranularity} +: ${parameter.maskGranularity}] <= ${prefix}_wdata[${(i + 1) * parameter.maskGranularity - 1}:${i * parameter.maskGranularity}];"
-           )
-         else
-           Seq(
-             s"if (${prefix}_en & ${prefix}_wmode) Memory[${prefix}_addr] <= ${prefix}_wdata;"
-           )) ++
         Seq(s"end // ${prefix}") ++
         Seq(
-          s"assign ${prefix}_rdata = _${prefix}_ren & ~_${prefix}_rmode ? Memory[_${prefix}_raddr] : ${parameter.width}'bx;"
+          s"assign ${prefix}_rdata = (_${prefix}_ren & ~_${prefix}_rmode) ? Memory[_${prefix}_raddr] : ",
+          s"                         (_${prefix}_ren &  _${prefix}_rmode) ? _${prefix}_rdata_rf : ${parameter.width}'bx;"
         )
     }
     .flatten
@@ -223,9 +165,13 @@ class SRAMBlackbox(parameter: CIRCTSRAMParameter)
     (Seq(
       s"reg [${parameter.width - 1}:0] Memory[0:${parameter.depth - 1}];",
       "initial begin",
-      """$readmemh("all_zero.hex", Memory);""",
+      // s"""$$readmemh("${init_hex}", Memory);""",
+      "integer i;",
+      s"  for (i = 0; i < ${parameter.depth}; i = i + 1) begin",
+      s"    Memory[i] = ${parameter.width}'(i);",
+      "  end",
       "end"
-    ) ++ wLogic ++ rLogic ++ rwLogic)
+    ) ++ rwLogic)
       .mkString("\n")
 
   override def desiredName = parameter.moduleName
@@ -249,7 +195,8 @@ class BlkBoxMemIO[T <: Data](depth: Int, t: T) extends Bundle {
   val wrData = Input(t)
 }
 
-class DualPortBlkBoxMem[T <: Data](depth: Int, t: T) extends Module {
+class DualPortBlkBoxMem[T <: Data](depth: Int, t: T, init_hex: String = "")
+    extends Module {
   val io  = IO(Vec(2, new BlkBoxMemIO(depth, t)))
   val mem = Instantiate(
     new SRAMBlackbox(
@@ -261,7 +208,8 @@ class DualPortBlkBoxMem[T <: Data](depth: Int, t: T) extends Module {
         depth.intValue,
         t.getWidth,
         0
-      )
+      ),
+      init_hex
     )
   )
 
@@ -277,7 +225,11 @@ class DualPortBlkBoxMem[T <: Data](depth: Int, t: T) extends Module {
 
 object DualPortBlkBoxMem extends App {
   ChiselStage.emitSystemVerilogFile(
-    new DualPortBlkBoxMem(1024, UInt(8.W)),
+    new DualPortBlkBoxMem(
+      1024,
+      UInt(8.W),
+      "/home/bathtuub/workspace/ouros-chisel/mem_init.hex"
+    ),
     Array("--target-dir", "sv-gen"),
     firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info")
   )

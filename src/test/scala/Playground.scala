@@ -6,6 +6,35 @@ import _root_.circt.stage.ChiselStage
 import common._
 import common.Helper._
 
+class PlaySpec extends AnyFreeSpec with ChiselSim {
+  "play" in {
+    simulate(
+      new DualPortBlkBoxMem(
+        1024,
+        UInt(8.W),
+        getClass.getResource("/mem_init.hex").getPath()
+      )
+    ) { dut =>
+      dut.io(0).enable.poke(true)
+      dut.io(0).wrEna.poke(false)
+      for (i <- 0 until 15) {
+        dut.io(0).addr.poke(i)
+        dut.clock.step()
+      }
+
+      dut.io(1).enable.poke(true)
+      dut.io(1).wrEna.poke(false)
+      for (i <- 0 until 15) {
+        dut.io(0).addr.poke(i)
+        dut.io(0).wrEna.poke(true)
+        dut.io(0).wrData.poke(42 + i)
+        dut.io(1).addr.poke(i)
+        dut.clock.step()
+      }
+    }
+  }
+}
+
 // TODO update this
 
 /* class AnyThat extends Module { val io = IO(new Bundle { val in = Input(Vec(8,
