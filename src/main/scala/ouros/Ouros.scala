@@ -27,12 +27,13 @@ object InjectTo extends ChiselEnum {
  */
 class Ouros extends Module {
   val io = IO(new Bundle {
-    val start     = Input(Bool())
-    val inject_to = Input(InjectTo())
-    val inject    = Flipped(Valid(Vec(maxAppLen, new Atom)))
-    val done      = Output(Bool())
-    val noExist   = Output(Bool())
-    val realNon   = Output(Bool())
+    val start       = Input(Bool())
+    val inject_to   = Input(InjectTo())
+    val inject      = Flipped(Valid(Vec(maxAppLen, new Atom)))
+    val inject_addr = Input(Addr)
+    val done        = Output(Bool())
+    val noExist     = Output(Bool())
+    val realNon     = Output(Bool())
   })
 
   def getDest(app: Vec[Atom]): Dest.Type = {
@@ -54,9 +55,25 @@ class Ouros extends Module {
     wire
   }
 
-  val dheap  = Module(new DrfHeap)
-  val reducr = Module(new Reducer)
-  val alu    = Module(new Alu(pipelined = AluPipe))
+  val dheap   = Module(new DrfHeap)
+  val reducr  = Module(new Reducer)
+  val alu     = Module(new Alu(pipelined = AluPipe))
+  val gc      = Module(new GarbageCollector)
+  val addrBox = Module(new AddrBox)
+  // ============ non-essential regs =============
+  val preInject = RegNext(io.inject.valid)
+  val injected  = RegInit(false.B)
+
+  when(!io.inject.valid && preInject) { // negative edge
+    injected := true.B
+  }
+
+  val wireFreeAddr = {
+    val wire = Wire(DecoupledIO(Addr))
+    wire       := DontCare
+    wire.valid := false.B
+    wire
+  }
 
   val wireToDheapA0 = wireGen
   val wireToDheapA1 = wireGen
@@ -110,6 +127,9 @@ class Ouros extends Module {
       .otherwise { wireToReducr2 :<>= alu.io.out }
   }
 
+  val bufferDealloc  = Queue(dheap.io.dealloc_addr, 2)
+  val bufferFreeAddr = Queue(wireFreeAddr, 2)
+
   val bufferDheapA0 = Queue(wireToDheapA0, bufferSize) // from dheap.main
   val bufferDheapA1 = Queue(wireToDheapA1, bufferSize) // from reducer
   val bufferDheapA2 = Queue(wireToDheapA2, bufferSize) // from alu
@@ -119,8 +139,9 @@ class Ouros extends Module {
   val bufferDheapB0 = Queue(reducr.io.out_app, bufferSize) // from reducer
   val bufferDheapB1 = Queue(dheap.io.out_big_drf, bufferSize)
   val arbiterDheapB = Module(new Arbiter(new FrozenApp, 2))
-  val ringDheapB0   = Module(new Ring(bufferSize, Addr))
-  val ringDheapB1   = Module(new Ring(bufferSize, Addr))
+
+  val ringDheapB0 = Module(new Ring(bufferSize, Addr))
+  val ringDheapB1 = Module(new Ring(bufferSize, Addr))
 
   val bufferReducr0 = Queue(wireToReducr0, bufferSize) // from reducer
   val bufferReducr1 = Queue(wireToReducr1, bufferSize) // from dheap.main
@@ -175,17 +196,31 @@ class Ouros extends Module {
   dheap.io.found := reducr.io.found || ringDheapB0.io.found || ringDheapB1.io.found
 
   // gc signals
-  // reducr.io.free_addr := dheap.io.free_addr
-  // dheap.io.addr_consumed := reducr.io.addr_consumed
+  gc.io.free_addr.ready := false.B
+  when(injected) {
+    wireFreeAddr :<>= gc.io.free_addr
+  }
+  addrBox.io.dheap_feedback.valid := false.B
+  addrBox.io.dheap_feedback.bits  := DontCare
+  addrBox.io.addr_acquire       :<>= bufferFreeAddr
+  dheap.io.free_addr            :<>= addrBox.io.addr_consumers.last
+  addrBox.io.addr_consumers.zip(reducr.io.free_addrs).foreach {
+    case (box, rdc) => rdc :<>= box
+  }
   reducr.io.need_split := dheap.io.out_big_drf.valid
+  gc.io.deallocate   :<>= bufferDealloc
 
   // non-essential ports
   dheap.io.inject.valid  := io.inject_to === InjectTo.Heap && io.inject.valid
   dheap.io.inject.bits   := io.inject.bits
+  dheap.io.inject_addr   := io.inject_addr
   dheap.io.start         := io.start
   io.done                := dheap.io.done
   reducr.io.inject.valid := io.inject_to === InjectTo.Comb && io.inject.valid
   reducr.io.inject.bits  := io.inject.bits
+  reducr.io.inject_addr  := io.inject_addr
+  gc.io.inject           := reducr.io.inject.valid // bridge it
+  gc.io.inject_addr      := io.inject_addr
 }
 
 object Ouros extends App {

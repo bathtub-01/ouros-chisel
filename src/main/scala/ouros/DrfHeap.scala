@@ -110,7 +110,7 @@ class DrfHeap extends Module {
     val found       = Input(Bool())
     // ============ gc signals =============
     val free_addr          = Flipped(Decoupled(Addr))
-    val dealloc_addr       = Valid(Addr)
+    val dealloc_addr       = Decoupled(Addr)
     val free_addr_feedback = Output(Addr)
     // ============ non-essential ports ===================
     val non_exist   = Output(Bool())
