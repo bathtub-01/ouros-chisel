@@ -22,33 +22,34 @@ object ReducerStm extends ChiselEnum {
  */
 class Reducer extends Module {
   val io = IO(new Bundle {
-    val free_addr     = Input(Addr)
-    val in            = Flipped(Decoupled(new ActiveApp))
-    val out_spine     = Decoupled(new ActiveApp)
-    val out_app       = Decoupled(new FrozenApp)
-    val addr_consumed = Output(UInt(3.W))
-    val need_split    = Input(Bool())
-    val search        = Input(Addr)
-    val found         = Output(Bool())
+    val free_addrs = Vec(consumers_reducer, Flipped(Decoupled(Addr)))
+    val in         = Flipped(Decoupled(new ActiveApp))
+    val out_spine  = Decoupled(new ActiveApp)
+    val out_app    = Decoupled(new FrozenApp)
+    val need_split = Input(Bool())
+    val search     = Input(Addr)
+    val found      = Output(Bool())
     // ============ non-essential ports ===================
-    val inject = Flipped(Valid(Vec(maxAppLen, new Atom)))
+    val inject      = Flipped(Valid(Vec(maxAppLen, new Atom)))
+    val inject_addr = Input(Addr)
   })
 
-  val combTable  = Module(new BlockMem(progSize, Vec(maxAppLen, new Atom)))
-  val regIn      = RegInit(0.U.asTypeOf(new ActiveApp))
-  val regSpine   = RegInit(0.U.asTypeOf(Vec(maxAppLen, new Atom)))
-  val regAddr    = RegInit(0.U.asTypeOf(Addr))
-  val regArity   = RegInit(0.U(log2Ceil(comArity + 1).W))
-  val regStm     = RegInit(ReducerStm.IDLE)
-  val regIdx     = RegInit(0.U(3.W))
-  val regAppMask = RegInit(false.B)
+  val combTable    = Module(new BlockMem(progSize, Vec(maxAppLen, new Atom)))
+  val regIn        = RegInit(0.U.asTypeOf(new ActiveApp))
+  val regSpine     = RegInit(0.U.asTypeOf(Vec(maxAppLen, new Atom)))
+  val regAddrs     = RegInit(0.U.asTypeOf(Vec(consumers_reducer, Addr)))
+  val regArity     = RegInit(0.U(log2Ceil(comArity + 1).W))
+  val regStm       = RegInit(ReducerStm.IDLE)
+  val regIdx       = RegInit(0.U(3.W))
+  val regAppMask   = RegInit(false.B)
+  val addrConsumed = WireInit(0.U(3.W))
 
   def stepNext(): Unit = {
-    io.in.ready := true.B
+    io.in.ready := io.free_addrs.forall(_.valid)
     when(io.in.fire) {
-      regIn   := io.in.bits
-      regIdx  := 0.U
-      regAddr := io.free_addr + io.addr_consumed + io.need_split.asUInt
+      regIn  := io.in.bits
+      regIdx := 0.U
+
       switch(io.in.bits.app(0).atomType) {
         is(AtomType.COM) {
           val comb = io.in.bits.app(0).toCom()
@@ -64,11 +65,6 @@ class Reducer extends Module {
     }.otherwise {
       regStm := ReducerStm.IDLE
     }
-  }
-
-  class Pair extends Bundle {
-    val atom = new Atom
-    val idx  = UInt(3.W)
   }
 
   def moreApp(app: Vec[Atom]): Bool =
@@ -95,7 +91,7 @@ class Reducer extends Module {
         is(AtomType.PTR) {
           val ptr = atom.toPtr()
           when(ptr.ncell) {
-            r := makePtr(true.B, regAddr + ptr.pointer)
+            r := makePtr(true.B, io.free_addrs(ptr.pointer).bits)
           }
         }
         is(AtomType.ARG) {
@@ -120,13 +116,14 @@ class Reducer extends Module {
   io.out_spine.valid := false.B
   io.out_app.bits    := DontCare
   io.out_app.valid   := false.B
-  io.addr_consumed   := 0.U
   io.found           := false.B
+  io.free_addrs.zipWithIndex.foreach { case (p, idx) =>
+    p.ready := idx.U < addrConsumed
+  }
 
   // program injection
   when(io.inject.valid) {
-    combTable.write(io.inject.bits, regAddr)
-    regAddr := regAddr + 1.U
+    combTable.write(io.inject.bits, io.inject_addr)
   }
 
   // main logic
@@ -145,7 +142,7 @@ class Reducer extends Module {
         resSpine
       }
       val template = combTable.readOut
-      io.addr_consumed := template.count { isNested(_) }
+      addrConsumed := template.count { isNested(_) }
       when(moreApp(template)) {
         val founded = findApp(template)
         regSpine := template
@@ -154,6 +151,9 @@ class Reducer extends Module {
         combTable.read(
           regIn.app(0).getCombAddr() + template(founded).getPtr() + 1.U
         )
+        regAddrs.zip(io.free_addrs).foreach { case (reg, port) =>
+          reg := port.bits
+        }
       }.otherwise {
         stepNext()
       }
@@ -161,7 +161,7 @@ class Reducer extends Module {
     is(ReducerStm.APP) {
       io.out_app.valid := true.B
       io.out_app.bits  := mkFrozenApp(
-        regAddr + regSpine(regIdx).toPtr().pointer,
+        regAddrs((regSpine(regIdx).toPtr().pointer)),
         inst(combTable.readOut)
       )
       when(io.out_app.ready) {
@@ -183,7 +183,7 @@ class Reducer extends Module {
         val ptr = p.bits.toPtr()
         p.idx >= regIdx && p.bits.isPtr() &&
         ptr.ncell &&
-        io.search === ptr.pointer + regAddr
+        io.search === regAddrs(ptr.pointer)
       }
     }
     is(ReducerStm.SPECIAL) {
@@ -192,25 +192,23 @@ class Reducer extends Module {
         val resSpine = WireInit(0.U.asTypeOf(new ActiveApp))
         resSpine        := regIn
         resSpine.app(0) := regIn.app(1).dash()
-        resSpine.app(1) := makePtr(false.B, regAddr)
+        resSpine.app(1) := makePtr(false.B, io.free_addrs(0).bits)
         resSpine
       }
       io.out_app.valid := true.B
       io.out_app.bits  := {
         val outApp = WireInit(0.U.asTypeOf(new FrozenApp))
-        outApp.heap_addr := regAddr
+        outApp.heap_addr := io.free_addrs(0).bits
         outApp.app(0)    := regIn.app(1).dash()
-        outApp.app(1)    := makePtr(false.B, regAddr)
+        outApp.app(1)    := makePtr(false.B, io.free_addrs(0).bits)
         outApp
       }
       regAppMask := false.B
-      when(regAppMask) {
-        io.addr_consumed := 1.U
-      }
       when(io.out_app.ready) {
+        addrConsumed := 1.U
         stepNext()
       }
-      io.found := io.search === regAddr
+      io.found := io.search === io.free_addrs(0).bits
     }
   }
 }

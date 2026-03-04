@@ -101,21 +101,24 @@ class StkCell extends Bundle {
  */
 class DrfHeap extends Module {
   val io = IO(new Bundle {
-    val in_main       = Flipped(Decoupled(new ActiveApp))
-    val in_sub        = Flipped(Decoupled(new FrozenApp))
-    val out_main      = Decoupled(new ActiveApp)
-    val out_sub       = Decoupled(new ActiveApp)
-    val out_big_drf   = Decoupled(new FrozenApp)
-    val free_addr     = Output(Addr)
-    val addr_consumed = Input(UInt(3.W))
-    val search        = Output(Addr)
-    val found         = Input(Bool())
+    val in_main     = Flipped(Decoupled(new ActiveApp))
+    val in_sub      = Flipped(Decoupled(new FrozenApp))
+    val out_main    = Decoupled(new ActiveApp)
+    val out_sub     = Decoupled(new ActiveApp)
+    val out_big_drf = Decoupled(new FrozenApp)
+    val search      = Output(Addr)
+    val found       = Input(Bool())
+    // ============ gc signals =============
+    val free_addr          = Flipped(Decoupled(Addr))
+    val dealloc_addr       = Valid(Addr)
+    val free_addr_feedback = Output(Addr)
     // ============ non-essential ports ===================
-    val non_exist = Output(Bool())
-    val real_non  = Output(Bool())
-    val inject    = Flipped(Valid(Vec(maxAppLen, new Atom)))
-    val start     = Input(Bool())
-    val done      = Output(Bool())
+    val non_exist   = Output(Bool())
+    val real_non    = Output(Bool())
+    val inject      = Flipped(Valid(Vec(maxAppLen, new Atom)))
+    val inject_addr = Input(Addr)
+    val start       = Input(Bool())
+    val done        = Output(Bool())
   })
 
   val busy         = RegInit(false.B)
@@ -126,6 +129,7 @@ class DrfHeap extends Module {
   val regAddr      = RegInit(0.U.asTypeOf(Addr))
   val regIAddr     = RegInit(0.U.asTypeOf(Addr))
   val regNoExist   = RegNext(io.found)
+  val regFreeAddr  = RegInit(0.U.asTypeOf(new BitsWithValid(Addr)))
   val threadStacks = Wire(
     Vec(maxThreads, new StackPort(threadStkDepth, new StkCell))
   )
@@ -140,13 +144,12 @@ class DrfHeap extends Module {
   val mainHeap = Module(
     new DualPortBlkBoxMem(heapSize, Vec(maxAppLen, new Atom), false, false)
   )
-  val workingHeap   = Module(new DualPortBlockMem(heapSize, Bool()))
-  val regBusy       = RegInit(false.B)
-  val regAddrBumper = RegInit(0.U.asTypeOf(Addr))
-  val regArgId      = RegInit(0.U(3.W)) // hardcode this should be fine
-  val regSubMask    = RegInit(false.B)
-  val needSplit     = WireInit(false.B)
-  val bBorrowed     = WireInit(false.B)
+  val workingHeap = Module(new DualPortBlockMem(heapSize, Bool()))
+  val regBusy     = RegInit(false.B)
+  val regArgId    = RegInit(0.U(3.W)) // hardcode this should be fine
+  val regSubMask  = RegInit(false.B)
+  val needSplit   = WireInit(false.B)
+  val bBorrowed   = WireInit(false.B)
 
   // some shorthands
   def currentStk     = threadStacks(regInMain.stack_idx)
@@ -157,13 +160,6 @@ class DrfHeap extends Module {
   // connect Vec of ports to underlying moduels
   threadStacks.zip(_threadStacks).foreach { case (p, m) => p :<>= m.io }
   frameStacks.zip(_frameStacks).foreach { case (p, m) => p :<>= m.io }
-
-  // def mkHeapCell(exist: Bool, app: Vec[Atom]): HeapCell = {
-  //   val wire = Wire(new HeapCell)
-  //   wire.exist := exist
-  //   wire.app   := app
-  //   wire
-  // }
 
   def mkStkCell(frame: Bool, addr: UInt): StkCell = {
     val wire = Wire(new StkCell)
@@ -203,8 +199,6 @@ class DrfHeap extends Module {
 
   def selectNextArg(app: Vec[Atom]): (UInt, UInt) =
     (2.U, app(2).toPtr().pointer)
-
-  def freeAddrLocal: UInt = regAddrBumper + io.addr_consumed
 
   def findDmdStk(): UInt =
     threadStacks.indexWhere(s =>
@@ -439,7 +433,7 @@ class DrfHeap extends Module {
 
   // consume the next input
   def nextMain(): Unit = {
-    io.in_main.ready := true.B
+    io.in_main.ready := io.free_addr.ready
     regInMain        := io.in_main.bits
     switch(genCONSUMEs) {
       is(CONSUMEs.NoInput) {
@@ -475,7 +469,7 @@ class DrfHeap extends Module {
     val target = regInMain.app
 
     val (dres1, dres2, is_big) =
-      deref(dmder, select1stArg(dmder)._1, target, freeAddrLocal)
+      deref(dmder, select1stArg(dmder)._1, target, regFreeAddr.bits)
 
     putOutputMain(regInMain.stack_idx, dres1)
 
@@ -497,7 +491,9 @@ class DrfHeap extends Module {
           frameStacks(stkId).pop()
         }
         when(canAvoidUpdate) {
-          bBorrowed := false.B
+          io.dealloc_addr.valid := true.B
+          bBorrowed             := false.B
+          workingHeap.writeB(false.B, regAddr)
         }.otherwise {
           bBorrowed := true.B
           writeBack()
@@ -508,7 +504,7 @@ class DrfHeap extends Module {
 
     when(is_big) {
       needSplit                     := true.B
-      io.out_big_drf.bits.heap_addr := freeAddrLocal
+      io.out_big_drf.bits.heap_addr := regFreeAddr.bits
       io.out_big_drf.bits.app       := dres2
     }
   }
@@ -525,12 +521,12 @@ class DrfHeap extends Module {
       }
       is(IAs1.ExistWHNF) {
         val (dres1, dres2, is_big) =
-          deref(dmder, regArgId, target, freeAddrLocal)
+          deref(dmder, regArgId, target, regFreeAddr.bits)
         updated_dmder := dres1
         regInMain.app := updated_dmder
         when(is_big) {
           needSplit                     := true.B
-          io.out_big_drf.bits.heap_addr := freeAddrLocal
+          io.out_big_drf.bits.heap_addr := regFreeAddr.bits
           io.out_big_drf.bits.app       := dres2
         }
       }
@@ -603,25 +599,26 @@ class DrfHeap extends Module {
   frameStacks.foreach(s => s.init())
   mainHeap.init()
   workingHeap.init()
-  io.in_main.ready     := false.B
-  io.in_sub.ready      := false.B
-  io.out_main.valid    := false.B
-  io.out_main.bits     := DontCare
-  io.out_sub.valid     := false.B
-  io.out_sub.bits      := DontCare
-  io.out_big_drf.valid := needSplit
-  io.out_big_drf.bits  := DontCare
-  io.free_addr         := regAddrBumper
-  io.search            := DontCare
-  io.non_exist         := regNoExist
-  io.real_non          := false.B
-  regAddrBumper        := regAddrBumper + io.addr_consumed + needSplit.asUInt
-  regSubMask           := false.B
+  io.in_main.ready      := false.B
+  io.in_sub.ready       := false.B
+  io.out_main.valid     := false.B
+  io.out_main.bits      := DontCare
+  io.out_sub.valid      := false.B
+  io.out_sub.bits       := DontCare
+  io.out_big_drf.valid  := needSplit
+  io.out_big_drf.bits   := DontCare
+  io.search             := DontCare
+  io.non_exist          := regNoExist
+  io.real_non           := false.B
+  regSubMask            := false.B
+  io.free_addr_feedback := regFreeAddr.bits
+  io.free_addr.ready    := needSplit || !regFreeAddr.valid
+  io.dealloc_addr.valid := false.B
+  io.dealloc_addr.bits  := regAddr
 
   // program injection & start/end control
   when(!busy && io.inject.valid) {
-    mainHeap.writeB(io.inject.bits, regAddrBumper)
-    regAddrBumper := regAddrBumper + 1.U
+    mainHeap.writeB(io.inject.bits, io.inject_addr)
   }
 
   io.done := !busy
@@ -659,6 +656,10 @@ class DrfHeap extends Module {
     io.out_sub.bits.app       := dashApp(io.in_sub.bits.app)
     when(io.in_sub.fire) {
       mainHeap.writeB(io.in_sub.bits.app, io.in_sub.bits.heap_addr)
+    }
+    when(needSplit || !regFreeAddr.valid) {
+      regFreeAddr.valid := io.free_addr.valid
+      regFreeAddr.bits  := io.free_addr.bits
     }
   }
 }

@@ -175,9 +175,9 @@ class Ouros extends Module {
   dheap.io.found := reducr.io.found || ringDheapB0.io.found || ringDheapB1.io.found
 
   // gc signals
-  reducr.io.free_addr    := dheap.io.free_addr
-  dheap.io.addr_consumed := reducr.io.addr_consumed
-  reducr.io.need_split   := dheap.io.out_big_drf.valid
+  // reducr.io.free_addr := dheap.io.free_addr
+  // dheap.io.addr_consumed := reducr.io.addr_consumed
+  reducr.io.need_split := dheap.io.out_big_drf.valid
 
   // non-essential ports
   dheap.io.inject.valid  := io.inject_to === InjectTo.Heap && io.inject.valid
