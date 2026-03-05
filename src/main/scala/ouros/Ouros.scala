@@ -129,6 +129,7 @@ class Ouros extends Module {
 
   val bufferDealloc  = Queue(dheap.io.dealloc_addr, 2)
   val bufferFreeAddr = Queue(wireFreeAddr, 2)
+  val bufferFeedBack = Queue(addrBox.io.feedback_to_gc, 2)
 
   val bufferDheapA0 = Queue(wireToDheapA0, bufferSize) // from dheap.main
   val bufferDheapA1 = Queue(wireToDheapA1, bufferSize) // from reducer
@@ -200,8 +201,9 @@ class Ouros extends Module {
   when(injected) {
     wireFreeAddr :<>= gc.io.free_addr
   }
-  addrBox.io.dheap_feedback.valid := false.B
-  addrBox.io.dheap_feedback.bits  := DontCare
+  gc.io.feedback                :<>= bufferFeedBack
+  addrBox.io.dheap_feedback.valid := dheap.io.out_big_drf.valid
+  addrBox.io.dheap_feedback.bits  := dheap.io.free_addr_feedback
   addrBox.io.addr_acquire       :<>= bufferFreeAddr
   dheap.io.free_addr            :<>= addrBox.io.addr_consumers.last
   addrBox.io.addr_consumers.zip(reducr.io.free_addrs).foreach {
@@ -219,7 +221,7 @@ class Ouros extends Module {
   reducr.io.inject.valid := io.inject_to === InjectTo.Comb && io.inject.valid
   reducr.io.inject.bits  := io.inject.bits
   reducr.io.inject_addr  := io.inject_addr
-  gc.io.inject           := reducr.io.inject.valid // bridge it
+  gc.io.inject           := dheap.io.inject.valid // bridge it
   gc.io.inject_addr      := io.inject_addr
 }
 

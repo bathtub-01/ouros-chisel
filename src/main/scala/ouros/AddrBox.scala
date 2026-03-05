@@ -13,7 +13,7 @@ class AddrBox extends Module {
     val addr_consumers = Vec(consumers, Decoupled(Addr))
     val addr_acquire   = Flipped(Decoupled(Addr))
     val dheap_feedback = Flipped(Valid(Addr))
-    val feedback_to_gc = Valid(Addr)
+    val feedback_to_gc = Decoupled(Addr)
   })
   val addrRegs = RegInit(
     VecInit(Seq.fill(consumers)(0.U.asTypeOf(new BitsWithValid(Addr))))
@@ -23,7 +23,24 @@ class AddrBox extends Module {
   )
   val can_consume = Wire(Vec(consumers, Bool()))
 
-  def anyAddrFire: Bool = io.addr_consumers.exists(_.fire)
+  def anyAddrFire: Bool = {
+    /* ugly as we can't do
+     * io.addr_consumers.take(consumers_reducer).exists(_.fire) */
+    val wire = Wire(
+      Vec(
+        consumers_reducer,
+        new Bundle {
+          val ready = Bool()
+          val valid = Bool()
+        }
+      )
+    )
+    wire.zip(io.addr_consumers).foreach { case (w, p) =>
+      w.ready := p.ready
+      w.valid := p.valid
+    }
+    wire.exists(w => w.ready && w.valid)
+  }
 
   def feedbackChosen: (Bool, UInt) = {
     val wireB = Wire(Bool())
@@ -84,7 +101,15 @@ class AddrBox extends Module {
   }.elsewhen(io.addr_consumers(0).fire) {
     io.feedback_to_gc.bits := addrRegs(0).bits
   }.otherwise {
-    io.feedback_to_gc.bits := feedbackRegs.indexWhere(_.valid)
+    io.feedback_to_gc.bits := {
+      val res = WireInit(0.U.asTypeOf(Addr))
+      for (i <- feedbackRegs.length - 1 to 0 by -1) {
+        when(feedbackRegs(i).valid) {
+          res := feedbackRegs(i).bits
+        }
+      }
+      res
+    }
   }
 }
 

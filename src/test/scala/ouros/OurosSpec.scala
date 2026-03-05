@@ -1,5 +1,3 @@
-// TODO remove this file, use main/scala/Main.scala instead
-
 package ouros
 
 import chisel3._
