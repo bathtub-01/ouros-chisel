@@ -433,7 +433,7 @@ class DrfHeap extends Module {
 
   // consume the next input
   def nextMain(): Unit = {
-    io.in_main.ready := io.free_addr.ready
+    io.in_main.ready := io.free_addr.valid
     regInMain        := io.in_main.bits
     switch(genCONSUMEs) {
       is(CONSUMEs.NoInput) {

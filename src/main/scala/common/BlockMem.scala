@@ -181,7 +181,7 @@ class SRAMBlackbox(
         // s"""$$readmemh("${init_hex}", Memory);""",
         "integer i;",
         s"  for (i = 0; i < ${parameter.depth}; i = i + 1) begin",
-        s"    Memory[i] = ${parameter.width}'(i);",
+        s"    Memory[i] = ${parameter.width}'(i+1);",
         "  end",
         "end"
       )

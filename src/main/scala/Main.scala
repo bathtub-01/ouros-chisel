@@ -9,19 +9,20 @@ import ouros._
 
 object Main extends App with ChiselSim {
   def runBenchmark(benchmark: Benchmark, dut: Ouros): Int = {
-    var cycles: Int = -1 // one cycle for loading `main`
-    cycles += 7 // compensate for the simulator
+    var cycles: Int = -2 // allign with the simulator
     dut.clock.step(3)
     // ====== program injection =======
     dut.io.inject.valid.poke(true.B)
     dut.io.inject_to.poke(InjectTo.Heap)
-    for (app <- benchmark.heap_img) {
+    for ((app, i) <- benchmark.heap_img.zipWithIndex) {
       dut.io.inject.bits.zip(app).foreach { case (p, a) => p.poke(a) }
+      dut.io.inject_addr.poke(i)
       dut.clock.step()
     }
     dut.io.inject_to.poke(InjectTo.Comb)
-    for (app <- benchmark.comb_img) {
+    for ((app, i) <- benchmark.comb_img.zipWithIndex) {
       dut.io.inject.bits.zip(app).foreach { case (p, a) => p.poke(a) }
+      dut.io.inject_addr.poke(i)
       dut.clock.step()
     }
     dut.io.inject.valid.poke(false.B)

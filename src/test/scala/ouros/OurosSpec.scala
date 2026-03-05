@@ -17,13 +17,15 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     // ====== program injection =======
     dut.io.inject.valid.poke(true.B)
     dut.io.inject_to.poke(InjectTo.Heap)
-    for (app <- benchmark.heap_img) {
+    for ((app, i) <- benchmark.heap_img.zipWithIndex) {
       dut.io.inject.bits.zip(app).foreach { case (p, a) => p.poke(a) }
+      dut.io.inject_addr.poke(i)
       dut.clock.step()
     }
     dut.io.inject_to.poke(InjectTo.Comb)
-    for (app <- benchmark.comb_img) {
+    for ((app, i) <- benchmark.comb_img.zipWithIndex) {
       dut.io.inject.bits.zip(app).foreach { case (p, a) => p.poke(a) }
+      dut.io.inject_addr.poke(i)
       dut.clock.step()
     }
     dut.io.inject.valid.poke(false.B)
@@ -78,7 +80,7 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     )
   }
 
-  inspect(SumEuler)
+  inspect(Adjoxo)
   // quickBenchmarks()
   // fullBenchmarks()
 }
