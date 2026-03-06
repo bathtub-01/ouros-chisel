@@ -45,4 +45,11 @@ object SystemConfig {
   val AluPipe: Boolean = false
 
   val atomPayloadSize = atomSize - AtomType.getWidth
+
+  /**
+   * When the free cells are lesser than (GCAt * heapSize), a GC round is
+   * triggered
+   */
+  val GcAt: Double     = 0.2
+  val GcThreshold: Int = (heapSize.toDouble * GcAt).toInt
 }

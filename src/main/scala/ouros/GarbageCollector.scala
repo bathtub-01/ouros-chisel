@@ -38,15 +38,18 @@ class GarbageCollector extends Module {
   })
   val regStm = RegInit(CollectorState.IDLE)
   val gcMem  = Module(new DualPortBlkBoxMem(heapSize, new GCCell, true, true))
-  val regFreeHead   = RegInit(0.U.asTypeOf(Addr))
-  val regWorkHead   = RegInit(0.U.asTypeOf(Addr))
-  val regFreeDrawed = RegInit(false.B)
-  val regWorkDrawed = RegInit(false.B)
-  val regFreeLen    = RegInit(heapSize.U(log2Ceil(heapSize + 1).W))
-  val regWorkLen    = RegInit(0.U(log2Ceil(heapSize + 1).W))
-  val regSweeper    = RegInit(0.U.asTypeOf(Addr))
-  val realFreeHead  = Wire(Addr)
-  val realWorkHead  = Wire(Addr)
+  val regFreeHead    = RegInit(0.U.asTypeOf(Addr))
+  val regWorkHead    = RegInit(0.U.asTypeOf(Addr))
+  val regFreeDrawed  = RegInit(false.B)
+  val regWorkDrawed  = RegInit(false.B)
+  val regFreeLen     = RegInit(heapSize.U(log2Ceil(heapSize + 1).W))
+  val regWorkLen     = RegInit(0.U(log2Ceil(heapSize + 1).W))
+  val regSweeper     = RegInit(0.U.asTypeOf(Addr))
+  val regMove        = RegInit(0.U(3.W))
+  val regPreGC       = RegInit(false.B)
+  val constSweepFrom = Reg(Addr)
+  val realFreeHead   = Wire(Addr)
+  val realWorkHead   = Wire(Addr)
   // ============ non-essential regs =============
 
   def mkGCCell(st: CellState.Type, ptr: Option[UInt] = None): GCCell = {
@@ -68,6 +71,52 @@ class GarbageCollector extends Module {
     }
   }
 
+  def pushToWorkList(addr: UInt, oldHead: UInt): Unit = {
+    regWorkHead := addr
+    gcMem.writeB(mkGCCell(CellState.WorkList, Some(oldHead)), addr)
+  }
+
+  /** Whether there is a mutator request in this cycle. */
+  def mutatorRequest(): Bool = {
+    val wire = Wire(Bool())
+    when(regStm === CollectorState.MARK) {
+      wire := io.free_addr.fire || io.feedback.fire
+    }.otherwise {
+      wire := io.free_addr.fire || io.deallocate.fire || io.feedback.fire
+    }
+    wire
+  }
+
+  def stepIdle(): Unit = {
+    when(!mutatorRequest() && regFreeLen <= GcThreshold.U) {
+      regStm      := CollectorState.ROOT
+      regWorkHead := 0.U
+      regWorkLen  := 1.U
+      regSweeper  := 0.U
+      gcMem.writeB(mkGCCell(CellState.WorkList, Some(0.U)), 0.U)
+    }
+  }
+
+  def stepRoot(): Unit = {
+    when(!mutatorRequest()) {
+      when(regSweeper < constSweepFrom - 1.U) {
+        val next = regSweeper + 1.U
+        regSweeper := next
+        pushToWorkList(next, regWorkHead)
+        regWorkLen := regWorkLen + 1.U
+      }.otherwise {
+        regStm   := CollectorState.MARK
+        regMove  := 3.U
+        regPreGC := false.B
+        // TODO gc cache
+      }
+    }
+  }
+
+  def stepMark(): Unit = ???
+
+  def stepSweep(): Unit = ???
+
   // default connections
   gcMem.init()
   realFreeHead        := Mux(regFreeDrawed, gcMem.readOutA.ptr, regFreeHead)
@@ -86,9 +135,11 @@ class GarbageCollector extends Module {
   when(io.inject) {
     regFreeHead := io.inject_addr + 1.U
     gcMem.writeB(mkGCCell(CellState.Unmarked), io.inject_addr)
-    regFreeLen := regFreeLen - 1.U
+    regFreeLen     := regFreeLen - 1.U
+    constSweepFrom := io.inject_addr + 1.U
   }
 
+  // handle mutator requests FIXME -- more logic for mark-and-sweep
   when(io.deallocate.fire) {
     io.free_addr.bits := io.deallocate.bits
     when(io.free_addr.fire) {
@@ -131,5 +182,13 @@ class GarbageCollector extends Module {
       mkGCCell(feedbackCellState, Some(realWorkHead)),
       io.feedback.bits
     )
+  }
+
+  // background GC work
+  switch(regStm) {
+    is(CollectorState.IDLE) { stepIdle() }
+    is(CollectorState.ROOT) { stepRoot() }
+    is(CollectorState.MARK) { stepMark() }
+    is(CollectorState.SWEEP) { stepSweep() }
   }
 }
