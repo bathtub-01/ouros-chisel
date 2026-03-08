@@ -22,6 +22,12 @@ object CellState extends ChiselEnum {
   val Marked   = Value
 }
 
+object MarkMoves extends ChiselEnum {
+  val POP_WORKLIST   = Value
+  val WAIT_HEAP_READ = Value
+  val HANDLE_APP     = Value
+}
+
 class GCCell extends Bundle {
   val state = CellState()
   val ptr   = Addr
@@ -29,27 +35,46 @@ class GCCell extends Bundle {
 
 class GarbageCollector extends Module {
   val io = IO(new Bundle {
-    val feedback   = Flipped(Decoupled(Addr))
-    val deallocate = Flipped(Decoupled(Addr))
-    val free_addr  = Decoupled(Addr)
+    val feedback       = Flipped(Decoupled(Addr))
+    val deallocate     = Flipped(Decoupled(Addr))
+    val free_addr      = Decoupled(Addr)
+    val heap_read_addr = Valid(Addr)
+    val heap_read      = Flipped(Valid(AppV))
+    val monitor        = Flipped(Valid(new ActiveApp))
     // ============ non-essential ports ===================
     val inject      = Input(Bool())
     val inject_addr = Input(Addr)
   })
   val regStm = RegInit(CollectorState.IDLE)
   val gcMem  = Module(new DualPortBlkBoxMem(heapSize, new GCCell, true, true))
-  val regFreeHead    = RegInit(0.U.asTypeOf(Addr))
-  val regWorkHead    = RegInit(0.U.asTypeOf(Addr))
-  val regFreeDrawed  = RegInit(false.B)
-  val regWorkDrawed  = RegInit(false.B)
-  val regFreeLen     = RegInit(heapSize.U(log2Ceil(heapSize + 1).W))
-  val regWorkLen     = RegInit(0.U(log2Ceil(heapSize + 1).W))
-  val regSweeper     = RegInit(0.U.asTypeOf(Addr))
-  val regMove        = RegInit(0.U(3.W))
-  val regPreGC       = RegInit(false.B)
+  val regFreeHead   = RegInit(0.U.asTypeOf(Addr))
+  val regWorkHead   = RegInit(0.U.asTypeOf(Addr))
+  val regFreeDrawed = RegInit(false.B)
+  val regWorkDrawed = RegInit(false.B)
+  val regFreeLen    = RegInit(heapSize.U(log2Ceil(heapSize + 1).W))
+  val regWorkLen    = RegInit(0.U(log2Ceil(heapSize + 1).W))
+  val regSweeper    = RegInit(0.U.asTypeOf(Addr))
+  val regMove       = Reg(MarkMoves())
+  val regPreGC      = RegInit(false.B)
+  val regHpReader   = RegInit(0.U.asTypeOf(AppV))
+  val regBkReader   = RegInit(0.U.asTypeOf(new GCCell))
+  val regWorkOn     = RegInit(0.U.asTypeOf(Addr))
+  val regAppIdx     = RegInit(0.U(3.W))
+  val regMonitors   = RegInit(
+    0.U.asTypeOf(Vec(maxThreads, new BitsWithValid(AppV)))
+  )
   val constSweepFrom = Reg(Addr)
   val realFreeHead   = Wire(Addr)
   val realWorkHead   = Wire(Addr)
+  val bkReadOut      = {
+    val wire = Wire(new GCCell)
+    when(regPreGC) {
+      wire := gcMem.readOutA
+    }.otherwise {
+      wire := regBkReader
+    }
+    wire
+  }
   // ============ non-essential regs =============
 
   def mkGCCell(st: CellState.Type, ptr: Option[UInt] = None): GCCell = {
@@ -74,6 +99,32 @@ class GarbageCollector extends Module {
   def pushToWorkList(addr: UInt, oldHead: UInt): Unit = {
     regWorkHead := addr
     gcMem.writeB(mkGCCell(CellState.WorkList, Some(oldHead)), addr)
+  }
+
+  def morePtr(app: Vec[Atom]): Bool = ???
+
+  def findPtr(app: Vec[Atom]): UInt = ???
+
+  def markRead(addr: UInt): Unit = {
+    gcMem.readA(addr)
+    // TODO gc cache
+  }
+
+  def consumeWorklist(): Unit = {
+    when(regWorkLen === 0.U) {
+      regSweeper := 0.U
+      regPreGC   := true.B
+      regStm     := CollectorState.SWEEP
+      gcMem.readA(0.U)
+    }.otherwise {
+      gcMem.writeA(mkGCCell(CellState.Marked), realWorkHead)
+      // TODO gc cache
+      regWorkDrawed := true.B
+      regWorkLen    := regWorkLen - 1.U
+      regWorkOn     := realWorkHead
+      regMove       := MarkMoves.WAIT_HEAP_READ
+      regAppIdx     := 0.U
+    }
   }
 
   /** Whether there is a mutator request in this cycle. */
@@ -106,16 +157,120 @@ class GarbageCollector extends Module {
         regWorkLen := regWorkLen + 1.U
       }.otherwise {
         regStm   := CollectorState.MARK
-        regMove  := 3.U
+        regMove  := MarkMoves.POP_WORKLIST
         regPreGC := false.B
         // TODO gc cache
       }
     }
   }
 
-  def stepMark(): Unit = ???
+  def stepMark(): Unit = {
+    // defaults
+    regPreGC := false.B
+    when(regPreGC) {
+      regBkReader := gcMem.readOutA
+    }
 
-  def stepSweep(): Unit = ???
+    when(regMove === MarkMoves.POP_WORKLIST && !mutatorRequest()) {
+      consumeWorklist()
+    }
+
+    when(
+      regMove === MarkMoves.WAIT_HEAP_READ && io.heap_read.valid && !mutatorRequest()
+    ) {
+      when(io.heap_read.bits.exists(_.isPtr())) {
+        regHpReader := io.heap_read.bits
+        regMove     := MarkMoves.HANDLE_APP
+        val found = io.heap_read.bits.indexWhere(_.isPtr())
+        markRead(contentsWhere(io.heap_read.bits)(_.isPtr()).getPtr())
+        regAppIdx := found
+        regPreGC  := true.B
+      }.otherwise {
+        consumeWorklist()
+      }
+    }
+
+    when(regMove === MarkMoves.HANDLE_APP && !mutatorRequest()) {
+      val markThis = bkReadOut.state === CellState.Unmarked
+
+      when(markThis) {
+        pushToWorkList(regHpReader(regAppIdx).getPtr(), regWorkHead)
+        regWorkLen := regWorkLen + 1.U
+      }
+
+      when(morePtr(regHpReader)) {
+        val found = findPtr(regHpReader)
+        markRead(regHpReader(found).getPtr())
+        regAppIdx := found
+        regPreGC  := true.B
+      }.elsewhen(regMonitors.exists(_.valid)) {
+        val pick = regMonitors.indexWhere(_.valid)
+        regMonitors(pick).valid := false.B
+        regPreGC                := false.B
+        regBkReader             := mkGCCell(CellState.Marked)
+        regHpReader             := regMonitors(pick).bits
+        regAppIdx               := 0.U
+        regMove                 := MarkMoves.HANDLE_APP
+      }.otherwise {
+        when(markThis) {
+          val wHead = regHpReader(regAppIdx).getPtr()
+          gcMem.writeA(mkGCCell(CellState.Marked), wHead)
+          // take a shortcut, not pushing current one to worklist
+          gcMem.io.readwritePorts(1).isWrite := false.B
+          // TODO gc cache
+          regWorkHead := regWorkHead
+          regWorkLen  := regWorkLen
+          regWorkOn   := wHead
+          regMove     := MarkMoves.WAIT_HEAP_READ
+          regAppIdx   := 0.U
+        }.elsewhen(regWorkLen === 0.U) {
+          regSweeper := 0.U
+          gcMem.readA(0.U)
+          regPreGC := true.B
+          regStm   := CollectorState.SWEEP
+        }.otherwise {
+          val wHead = regWorkHead
+          gcMem.writeA(mkGCCell(CellState.Marked), wHead)
+          // TODO gc cache
+          regWorkDrawed := true.B
+          regWorkLen    := regWorkLen - 1.U
+          regWorkOn     := wHead
+          regMove       := MarkMoves.WAIT_HEAP_READ
+          regAppIdx     := 0.U
+        }
+      }
+    }
+  }
+
+  def stepSweep(): Unit = {
+    // defaults
+    regPreGC := false.B
+    when(regPreGC) {
+      regBkReader := gcMem.readOutA
+    }
+
+    when(!mutatorRequest()) {
+      when(bkReadOut.state === CellState.Marked) {
+        gcMem.writeB(mkGCCell(CellState.Unmarked), regSweeper)
+      }.elsewhen(
+        bkReadOut.state === CellState.Unmarked &&
+          regSweeper >= constSweepFrom
+      ) {
+        pushToFreeList(regSweeper, realFreeHead, false)
+        regFreeLen := regFreeLen - 1.U
+      }
+
+      when(regSweeper < (heapSize - 1).U) {
+        val next = regSweeper + 1.U
+        regSweeper := next
+        gcMem.readA(next)
+        regPreGC := true.B
+      }.otherwise {
+        regStm := CollectorState.IDLE
+      }
+    }
+
+  }
 
   // default connections
   gcMem.init()

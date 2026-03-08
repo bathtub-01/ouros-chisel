@@ -117,10 +117,10 @@ class Atom extends Bundle {
 
 class ActiveApp extends Bundle {
   val stack_idx = UInt(log2Ceil(maxThreads).W)
-  val app       = Vec(maxAppLen, new Atom)
+  val app       = AppV
 }
 
 class FrozenApp extends Bundle {
   val heap_addr = Addr
-  val app       = Vec(maxAppLen, new Atom)
+  val app       = AppV
 }

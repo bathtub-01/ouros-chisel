@@ -126,8 +126,23 @@ object Helper {
     val res = Wire(UInt(log2Ceil(v.length + 1).W))
     res := v.length.U
     for (i <- v.length - 1 to 0 by -1) {
-      when(p(v(i.U))) {
+      when(p(v(i))) {
         res := i.U
+      }
+    }
+    res
+  }
+
+  /**
+   * Return the first elements of a Vec when the predicate is satisfied.
+   *
+   * This should be better than using `indexWhere` to index the Vec.
+   */
+  def contentsWhere[T <: Data](v: Vec[T])(p: T => Bool): T = {
+    val res = WireInit(v(0))
+    for (i <- v.length - 1 to 0 by -1) {
+      when(p(v(i))) {
+        res := v(i)
       }
     }
     res
@@ -370,6 +385,8 @@ object Helper {
     ??? // if (b) Combinators.A else Combinators.K
 
   def Addr = UInt(log2Ceil(heapSize).W)
+
+  def AppV = Vec(maxAppLen, new Atom)
 
   def mkActiveApp(stk_id: UInt, app: Vec[Atom]): ActiveApp = {
     val wire = Wire(new ActiveApp)
