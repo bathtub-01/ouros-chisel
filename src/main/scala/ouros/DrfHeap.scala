@@ -112,6 +112,8 @@ class DrfHeap extends Module {
     val free_addr          = Flipped(Decoupled(Addr))
     val dealloc_addr       = Decoupled(Addr)
     val free_addr_feedback = Output(Addr)
+    val gc_heap_read_addr  = Flipped(Valid(Addr))
+    val gc_heap_read       = Valid(AppV)
     // ============ non-essential ports ===================
     val non_exist   = Output(Bool())
     val real_non    = Output(Bool())
@@ -130,6 +132,7 @@ class DrfHeap extends Module {
   val regIAddr     = RegInit(0.U.asTypeOf(Addr))
   val regNoExist   = RegNext(io.found)
   val regFreeAddr  = RegInit(0.U.asTypeOf(new BitsWithValid(Addr)))
+  val regGCGranted = RegInit(false.B)
   val threadStacks = Wire(
     Vec(maxThreads, new StackPort(threadStkDepth, new StkCell))
   )
@@ -615,6 +618,9 @@ class DrfHeap extends Module {
   io.free_addr.ready    := needSplit || !regFreeAddr.valid
   io.dealloc_addr.valid := false.B
   io.dealloc_addr.bits  := regAddr
+  regGCGranted          := false.B
+  io.gc_heap_read.valid := regGCGranted
+  io.gc_heap_read.bits  := mainHeap.readOutB
 
   // program injection & start/end control
   when(!busy && io.inject.valid) {
@@ -660,6 +666,11 @@ class DrfHeap extends Module {
     when(needSplit || !regFreeAddr.valid) {
       regFreeAddr.valid := io.free_addr.valid
       regFreeAddr.bits  := io.free_addr.bits
+    }
+    // when port b is not locally used, grant it to GC usage
+    when(io.in_sub.ready && !io.in_sub.valid && io.gc_heap_read_addr.valid) {
+      regGCGranted := true.B
+      mainHeap.readB(io.gc_heap_read_addr.bits)
     }
   }
 }

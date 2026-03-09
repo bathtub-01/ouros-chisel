@@ -101,9 +101,13 @@ class GarbageCollector extends Module {
     gcMem.writeB(mkGCCell(CellState.WorkList, Some(oldHead)), addr)
   }
 
-  def morePtr(app: Vec[Atom]): Bool = ???
+  // TODO gc cache
+  def morePtr(app: Vec[Atom]): Bool =
+    zipWithIndex(app).exists(p => p.idx > regAppIdx && p.bits.isPtr())
 
-  def findPtr(app: Vec[Atom]): UInt = ???
+  // TODO gc cache
+  def findPtr(app: Vec[Atom]): UInt =
+    zipWithIndex(app).indexWhere(p => p.idx > regAppIdx && p.bits.isPtr())
 
   def markRead(addr: UInt): Unit = {
     gcMem.readA(addr)
@@ -138,6 +142,9 @@ class GarbageCollector extends Module {
     wire
   }
 
+  def canDealloc: Bool =
+    regStm =/= CollectorState.MARK && io.deallocate.bits =/= regSweeper
+
   def stepIdle(): Unit = {
     when(!mutatorRequest() && regFreeLen <= GcThreshold.U) {
       regStm      := CollectorState.ROOT
@@ -166,13 +173,15 @@ class GarbageCollector extends Module {
 
   def stepMark(): Unit = {
     // defaults
-    regPreGC := false.B
+    io.heap_read_addr.valid := true.B
+    regPreGC                := false.B
     when(regPreGC) {
       regBkReader := gcMem.readOutA
     }
 
-    when(regMove === MarkMoves.POP_WORKLIST && !mutatorRequest()) {
-      consumeWorklist()
+    when(regMove === MarkMoves.POP_WORKLIST) {
+      io.heap_read_addr.bits := regWorkHead
+      when(!mutatorRequest()) { consumeWorklist() }
     }
 
     when(
@@ -186,6 +195,7 @@ class GarbageCollector extends Module {
         regAppIdx := found
         regPreGC  := true.B
       }.otherwise {
+        io.heap_read_addr.bits := realWorkHead
         consumeWorklist()
       }
     }
@@ -218,11 +228,12 @@ class GarbageCollector extends Module {
           // take a shortcut, not pushing current one to worklist
           gcMem.io.readwritePorts(1).isWrite := false.B
           // TODO gc cache
-          regWorkHead := regWorkHead
-          regWorkLen  := regWorkLen
-          regWorkOn   := wHead
-          regMove     := MarkMoves.WAIT_HEAP_READ
-          regAppIdx   := 0.U
+          regWorkHead            := regWorkHead
+          regWorkLen             := regWorkLen
+          regWorkOn              := wHead
+          regMove                := MarkMoves.WAIT_HEAP_READ
+          regAppIdx              := 0.U
+          io.heap_read_addr.bits := wHead
         }.elsewhen(regWorkLen === 0.U) {
           regSweeper := 0.U
           gcMem.readA(0.U)
@@ -232,11 +243,12 @@ class GarbageCollector extends Module {
           val wHead = regWorkHead
           gcMem.writeA(mkGCCell(CellState.Marked), wHead)
           // TODO gc cache
-          regWorkDrawed := true.B
-          regWorkLen    := regWorkLen - 1.U
-          regWorkOn     := wHead
-          regMove       := MarkMoves.WAIT_HEAP_READ
-          regAppIdx     := 0.U
+          regWorkDrawed          := true.B
+          regWorkLen             := regWorkLen - 1.U
+          regWorkOn              := wHead
+          regMove                := MarkMoves.WAIT_HEAP_READ
+          regAppIdx              := 0.U
+          io.heap_read_addr.bits := wHead
         }
       }
     }
@@ -274,16 +286,22 @@ class GarbageCollector extends Module {
 
   // default connections
   gcMem.init()
-  realFreeHead        := Mux(regFreeDrawed, gcMem.readOutA.ptr, regFreeHead)
-  realWorkHead        := Mux(regWorkDrawed, gcMem.readOutA.ptr, regWorkHead)
-  regFreeDrawed       := false.B
-  regWorkDrawed       := false.B
-  regFreeHead         := realFreeHead
-  regWorkHead         := realWorkHead
-  io.free_addr.valid  := regFreeLen > 0.U
-  io.free_addr.bits   := DontCare
-  io.deallocate.ready := true.B
-  io.feedback.ready   := true.B
+  realFreeHead            := Mux(regFreeDrawed, gcMem.readOutA.ptr, regFreeHead)
+  realWorkHead            := Mux(regWorkDrawed, gcMem.readOutA.ptr, regWorkHead)
+  regFreeDrawed           := false.B
+  regWorkDrawed           := false.B
+  regFreeHead             := realFreeHead
+  regWorkHead             := realWorkHead
+  io.free_addr.valid      := regFreeLen > 0.U
+  io.free_addr.bits       := DontCare
+  io.deallocate.ready     := true.B
+  io.feedback.ready       := true.B
+  io.heap_read_addr.valid := false.B
+  io.heap_read_addr.bits  := DontCare
+  when(regStm =/= CollectorState.MARK && io.monitor.valid) {
+    regMonitors(io.monitor.bits.stack_idx).valid := true.B
+    regMonitors(io.monitor.bits.stack_idx).bits  := io.monitor.bits.app
+  }
 
   // initialise the free-list
   // assume free_addr.ready === false.B during injection
@@ -295,7 +313,7 @@ class GarbageCollector extends Module {
   }
 
   // handle mutator requests FIXME -- more logic for mark-and-sweep
-  when(io.deallocate.fire) {
+  when(io.deallocate.fire && canDealloc) {
     io.free_addr.bits := io.deallocate.bits
     when(io.free_addr.fire) {
       // take the free addr from dealloc port directly

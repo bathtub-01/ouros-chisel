@@ -209,8 +209,12 @@ class Ouros extends Module {
   addrBox.io.addr_consumers.zip(reducr.io.free_addrs).foreach {
     case (box, rdc) => rdc :<>= box
   }
-  reducr.io.need_split := dheap.io.out_big_drf.valid
-  gc.io.deallocate   :<>= bufferDealloc
+  reducr.io.need_split        := dheap.io.out_big_drf.valid
+  gc.io.deallocate          :<>= bufferDealloc
+  gc.io.heap_read            :<= dheap.io.gc_heap_read
+  dheap.io.gc_heap_read_addr :<= gc.io.heap_read_addr
+  gc.io.monitor.valid         := reducr.io.out_spine.valid
+  gc.io.monitor.bits          := reducr.io.out_spine.bits
 
   // non-essential ports
   dheap.io.inject.valid  := io.inject_to === InjectTo.Heap && io.inject.valid
