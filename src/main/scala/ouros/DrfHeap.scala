@@ -229,6 +229,7 @@ class DrfHeap extends Module {
       dashApp(io.in_main.bits.app),
       incomingStk.top.addr
     )
+    workingHeap.writeA(false.B, incomingStk.top.addr)
   }
 
   def readTarget(p: UInt): Unit = {
@@ -268,6 +269,7 @@ class DrfHeap extends Module {
 
   def writeBack(): Unit = {
     mainHeap.writeB(dashApp(regInMain.app), regAddr)
+    workingHeap.writeB(false.B, regAddr)
   }
 
   def pushTarget(new_frame: Bool): Unit = {

@@ -25,7 +25,7 @@ object SystemConfig {
   val consumers: Int    = consumers_reducer + consumers_dheap
 
   /** cells in the heap */
-  val heapSize = 2 * 1024 // 2 * 1024
+  val heapSize = 2 * 1024
 
   /** thread resource in a core (number of stacks) */
   val maxThreads = 4

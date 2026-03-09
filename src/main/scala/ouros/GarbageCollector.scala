@@ -174,6 +174,7 @@ class GarbageCollector extends Module {
   def stepMark(): Unit = {
     // defaults
     io.heap_read_addr.valid := true.B
+    io.heap_read_addr.bits  := regWorkOn
     regPreGC                := false.B
     when(regPreGC) {
       regBkReader := gcMem.readOutA
@@ -265,11 +266,10 @@ class GarbageCollector extends Module {
       when(bkReadOut.state === CellState.Marked) {
         gcMem.writeB(mkGCCell(CellState.Unmarked), regSweeper)
       }.elsewhen(
-        bkReadOut.state === CellState.Unmarked &&
-          regSweeper >= constSweepFrom
+        bkReadOut.state === CellState.Unmarked
       ) {
         pushToFreeList(regSweeper, realFreeHead, false)
-        regFreeLen := regFreeLen - 1.U
+        regFreeLen := regFreeLen + 1.U
       }
 
       when(regSweeper < (heapSize - 1).U) {
@@ -312,7 +312,7 @@ class GarbageCollector extends Module {
     constSweepFrom := io.inject_addr + 1.U
   }
 
-  // handle mutator requests FIXME -- more logic for mark-and-sweep
+  // handle mutator requests
   when(io.deallocate.fire && canDealloc) {
     io.free_addr.bits := io.deallocate.bits
     when(io.free_addr.fire) {

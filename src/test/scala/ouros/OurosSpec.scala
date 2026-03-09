@@ -10,7 +10,7 @@ import ouros._
 
 class OurosSpec extends AnyFreeSpec with ChiselSim {
   def runBenchmark(benchmark: Benchmark, dut: Ouros): Int = {
-    var cycles: Int = -1 // one cycle for loading `main`
+    var cycles: Int = -2 // allign with the simulator
     dut.clock.step(3)
     // ====== program injection =======
     dut.io.inject.valid.poke(true.B)
@@ -32,7 +32,7 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     dut.clock.step()
     dut.io.start.poke(false.B)
     // ============ run ===============
-    while (!dut.io.done.peekBoolean() && cycles <= 1_000_00) {
+    while (!dut.io.done.peekBoolean() && cycles <= 5_000_00) {
       dut.clock.step()
       cycles = cycles + 1
     }
@@ -78,7 +78,7 @@ class OurosSpec extends AnyFreeSpec with ChiselSim {
     )
   }
 
-  inspect(Fib)
+  inspect(Whilex)
   // quickBenchmarks()
   // fullBenchmarks()
 }
