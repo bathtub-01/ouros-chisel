@@ -111,82 +111,160 @@ class DualPortBlockMem[T <: Data](depth: Int, t: T) extends Module {
   }
 }
 
-/**
- * This is stolen from chisel3.util
- */
-class SRAMBlackbox(
+/** Steal from CIRCTSRAMInterface.scala to lift a shared clock. */
+
+import scala.collection.immutable.SeqMap
+
+class MyReadWritePort(memoryParameter: CIRCTSRAMParameter) extends Record {
+  val address   = Input(UInt(log2Ceil(memoryParameter.depth).W))
+  val writeData = Input(UInt(memoryParameter.width.W))
+  val writeMask =
+    Option.when(memoryParameter.masked)(
+      Input(UInt((memoryParameter.width / memoryParameter.maskGranularity).W))
+    )
+  val writeEnable = Input(Bool())
+  val readData    = Output(UInt(memoryParameter.width.W))
+  val enable      = Input(Bool())
+
+  // Records store elements in reverse order
+  val elements: SeqMap[String, Data] = (SeqMap(
+    "addr"  -> address,
+    "en"    -> enable,
+    "wmode" -> writeEnable,
+    "wdata" -> writeData,
+    "rdata" -> readData
+  )).toSeq.reverse.to(SeqMap)
+}
+
+class MyInterface(memoryParameter: CIRCTSRAMParameter) extends Record {
+  val clock        = Input(Clock())
+  def RW(idx: Int) =
+    elements
+      .getOrElse(s"RW$idx", throw new Exception(s"Cannot get port RW$idx"))
+      .asInstanceOf[MyReadWritePort]
+
+  // Records store elements in reverse order
+  val elements: SeqMap[String, Data] =
+    (Seq
+      .tabulate(memoryParameter.readwrite)(i =>
+        s"RW$i" -> new MyReadWritePort(memoryParameter)
+      ) ++
+      Seq("clock" -> clock)).reverse
+      .to(SeqMap)
+}
+
+class SRAMReadFirstBlackbox(
     parameter: CIRCTSRAMParameter,
-    has_init_block: Boolean,
-    init_hex: String = "",
-    read_first_mode: Boolean
-) extends FixedIOExtModule(new CIRCTSRAMInterface(parameter)) { self =>
+) extends FixedIOExtModule(new MyInterface(parameter)) { self =>
 
   private val verilogInterface: String =
-    (Seq
+    (Seq("input clock") +: Seq
       .tabulate(parameter.readwrite)(idx =>
         Seq(
           s"// ReadWrite Port $idx",
           s"input [${log2Ceil(parameter.depth) - 1}:0] RW${idx}_addr",
           s"input RW${idx}_en",
-          s"input RW${idx}_clk",
           s"input RW${idx}_wmode",
           s"input [${parameter.width - 1}:0] RW${idx}_wdata",
-          s"output [${parameter.width - 1}:0] RW${idx}_rdata"
+          s"output reg [${parameter.width - 1}:0] RW${idx}_rdata"
         )
-      ))
-      .flatten
+      )).flatten
+      .mkString(",\n")
+
+  def flip(i: Int) =
+    if (i == 0) { 1 }
+    else { 0 }
+
+  private val rwLogic = Seq
+    .tabulate(parameter.readwrite) { idx =>
+      val prefix = s"RW${idx}"
+      val flips  = s"RW${flip(idx)}"
+      Seq(s"always @(posedge clock) begin // ${prefix}") ++
+        Seq(s"if (${prefix}_en) begin") ++
+        Seq(
+          s"${prefix}_rdata <= Memory[${prefix}_addr];",
+          s"if (${prefix}_wmode)",
+          s"  Memory[${prefix}_addr] <= ${prefix}_wdata;"
+        ) ++
+        Seq(s"end") ++
+        Seq(s"end // ${prefix}")
+    }
+    .flatten
+
+  private val init_logic =
+    Seq(
+      s"""(* ram_style = "block" *) reg [${parameter.width - 1}:0] Memory[0:${parameter.depth - 1}];""",
+      "initial begin",
+      "integer i;",
+      s"  for (i = 0; i < ${parameter.depth}; i = i + 1) begin",
+      s"    Memory[i] = ${parameter.width}'(i+1);",
+      "  end",
+      "end"
+    )
+
+  private val logic = (init_logic ++ rwLogic).mkString("\n")
+
+  override def desiredName = parameter.moduleName ++ "rf"
+
+  setInline(
+    desiredName + ".sv",
+    s"""module ${parameter.moduleName}rf(
+       |${verilogInterface}
+       |);
+       |${logic}
+       |endmodule
+       |""".stripMargin
+  )
+}
+
+/**
+ * This is stolen from chisel3.util
+ */
+class SRAMBlackbox(
+    parameter: CIRCTSRAMParameter,
+    use_bram: Boolean = true
+) extends FixedIOExtModule(new MyInterface(parameter)) { self =>
+
+  private val verilogInterface: String =
+    (Seq("input clock") +: Seq
+      .tabulate(parameter.readwrite)(idx =>
+        Seq(
+          s"// ReadWrite Port $idx",
+          s"input [${log2Ceil(parameter.depth) - 1}:0] RW${idx}_addr",
+          s"input RW${idx}_en",
+          s"input RW${idx}_wmode",
+          s"input [${parameter.width - 1}:0] RW${idx}_wdata",
+          s"output reg [${parameter.width - 1}:0] RW${idx}_rdata"
+        )
+      )).flatten
       .mkString(",\n")
 
   private val rwLogic = Seq
     .tabulate(parameter.readwrite) { idx =>
       val prefix = s"RW${idx}"
-      Seq(
-        s"reg [${log2Ceil(parameter.depth) - 1}:0] _${prefix}_raddr;",
-        s"reg _${prefix}_ren;",
-        s"reg _${prefix}_rmode;",
-        if (!read_first_mode) ""
-        else s"reg [${parameter.width - 1}:0] _${prefix}_rdata_rf;"
-      ) ++
-        Seq(s"always @(posedge ${prefix}_clk) begin // ${prefix}") ++
+      Seq(s"always @(posedge clock) begin // ${prefix}") ++
+        Seq(s"if (${prefix}_en) begin") ++
         Seq(
-          s"_${prefix}_raddr <= ${prefix}_addr;",
-          s"_${prefix}_ren <= ${prefix}_en;",
-          s"_${prefix}_rmode <= ${prefix}_wmode;",
-          if (!read_first_mode) ""
-          else
-            s"if (${prefix}_en & ${prefix}_wmode) _${prefix}_rdata_rf <= Memory[${prefix}_addr];",
-          s"if (${prefix}_en & ${prefix}_wmode) Memory[${prefix}_addr] <= ${prefix}_wdata;"
+          s"if (${prefix}_wmode)",
+          s"  Memory[${prefix}_addr] <= ${prefix}_wdata;",
+          "else",
+          s"  ${prefix}_rdata <= Memory[${prefix}_addr];",
         ) ++
-        Seq(s"end // ${prefix}") ++
-        {
-          if (!read_first_mode) {
-            Seq(
-              s"assign ${prefix}_rdata = (_${prefix}_ren & ~_${prefix}_rmode) ? Memory[_${prefix}_raddr] : ${parameter.width}'bx;"
-            )
-          } else {
-            Seq(
-              s"assign ${prefix}_rdata = (_${prefix}_ren & ~_${prefix}_rmode) ? Memory[_${prefix}_raddr] : ",
-              s"                         (_${prefix}_ren &  _${prefix}_rmode) ? _${prefix}_rdata_rf : ${parameter.width}'bx;"
-            )
-          }
-        }
+        Seq(s"end") ++
+        Seq(s"end // ${prefix}")
     }
     .flatten
 
   private val init_logic =
-    if (has_init_block)
+    if (use_bram) {
       Seq(
-        s"reg [${parameter.width - 1}:0] Memory[0:${parameter.depth - 1}];",
-        "initial begin",
-        // s"""$$readmemh("${init_hex}", Memory);""",
-        "integer i;",
-        s"  for (i = 0; i < ${parameter.depth}; i = i + 1) begin",
-        s"    Memory[i] = ${parameter.width}'(i+1);",
-        "  end",
-        "end"
+        s"""(* ram_style = "block" *) reg [${parameter.width - 1}:0] Memory[0:${parameter.depth - 1}];"""
       )
-    else
-      Seq(s"reg [${parameter.width - 1}:0] Memory[0:${parameter.depth - 1}];")
+    } else {
+      Seq(
+        s"""(* ram_style = "ultra" *) reg [${parameter.width - 1}:0] Memory[0:${parameter.depth - 1}];"""
+      )
+    }
 
   private val logic = (init_logic ++ rwLogic).mkString("\n")
 
@@ -214,35 +292,63 @@ class BlkBoxMemIO[T <: Data](depth: Int, t: T) extends Bundle {
 class DualPortBlkBoxMem[T <: Data](
     depth: Int,
     t: T,
-    has_init_block: Boolean,
-    read_first_mode: Boolean,
+    read_first_mode: Boolean = false,
+    use_bram: Boolean = false,
     init_hex: String = "",
 ) extends Module {
   val io  = IO(new SRAMInterface(depth, t, 0, 0, 2))
-  val mem = Instantiate(
-    new SRAMBlackbox(
-      new CIRCTSRAMParameter(
-        s"sram_2RW_${depth}x${t.getWidth}",
-        0,
-        0,
-        2,
-        depth.intValue,
-        t.getWidth,
-        0
-      ),
-      has_init_block,
-      init_hex,
-      read_first_mode
-    )
-  )
+  val mem =
+    if (read_first_mode)
+      Instantiate(
+        new SRAMReadFirstBlackbox(
+          new CIRCTSRAMParameter(
+            s"sram_2RW_${depth}x${t.getWidth}",
+            0,
+            0,
+            2,
+            depth.intValue,
+            t.getWidth,
+            0
+          )
+        )
+      )
+    else
+      Instantiate(
+        new SRAMBlackbox(
+          new CIRCTSRAMParameter(
+            s"sram_2RW_${depth}x${t.getWidth}",
+            0,
+            0,
+            2,
+            depth.intValue,
+            t.getWidth,
+            0
+          ),
+          use_bram
+        )
+      )
 
+  private def flip(i: Int) =
+    if (i == 0) { 1 }
+    else { 0 }
+
+  mem.io.clock := this.clock
+  val regFwd     = Seq.fill(2)(RegInit(false.B))
+  val regWritten = Seq.fill(2)(Reg(t))
   for (i <- 0 until 2) {
-    mem.io.RW(i).clock            := this.clock
+    regFwd(i) := io.readwritePorts(flip(i)).enable &&
+      io.readwritePorts(flip(i)).isWrite &&
+      io.readwritePorts(flip(i)).address === io.readwritePorts(i).address
+    regWritten(i)                 := io.readwritePorts(flip(i)).writeData
     mem.io.RW(i).address          := io.readwritePorts(i).address
     mem.io.RW(i).enable           := io.readwritePorts(i).enable
-    io.readwritePorts(i).readData := mem.io.RW(i).readData.asTypeOf(t)
-    mem.io.RW(i).writeData        := io.readwritePorts(i).writeData.asUInt
-    mem.io.RW(i).writeEnable      := io.readwritePorts(i).isWrite
+    io.readwritePorts(i).readData := Mux(
+      regFwd(i),
+      regWritten(i),
+      mem.io.RW(i).readData.asTypeOf(t)
+    )
+    mem.io.RW(i).writeData   := io.readwritePorts(i).writeData.asUInt
+    mem.io.RW(i).writeEnable := io.readwritePorts(i).isWrite
   }
 
   def init() = {

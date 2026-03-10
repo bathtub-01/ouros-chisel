@@ -358,3 +358,6 @@ simu-out/
 dbg.gtkw
 dbg-play.gtkw
 filter
+
+# some vivado stuff..
+*.jou

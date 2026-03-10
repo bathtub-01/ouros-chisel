@@ -46,7 +46,9 @@ class GarbageCollector extends Module {
     val inject_addr = Input(Addr)
   })
   val regStm = RegInit(CollectorState.IDLE)
-  val gcMem  = Module(new DualPortBlkBoxMem(heapSize, new GCCell, true, true))
+  val gcMem  = Module(
+    new DualPortBlkBoxMem(heapSize, new GCCell, read_first_mode = true)
+  )
   val regFreeHead   = RegInit(0.U.asTypeOf(Addr))
   val regWorkHead   = RegInit(0.U.asTypeOf(Addr))
   val regFreeDrawed = RegInit(false.B)

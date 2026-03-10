@@ -145,14 +145,16 @@ class DrfHeap extends Module {
       Module(new RegStack(frameStkDepth, Vec(maxThreads, Addr)))
     )
   val mainHeap = Module(
-    new DualPortBlkBoxMem(heapSize, Vec(maxAppLen, new Atom), false, false)
+    new DualPortBlkBoxMem(heapSize, Vec(maxAppLen, new Atom), use_bram = false)
   )
-  val workingHeap = Module(new DualPortBlockMem(heapSize, Bool()))
-  val regBusy     = RegInit(false.B)
-  val regArgId    = RegInit(0.U(3.W)) // hardcode this should be fine
-  val regSubMask  = RegInit(false.B)
-  val needSplit   = WireInit(false.B)
-  val bBorrowed   = WireInit(false.B)
+  val workingHeap = Module(
+    new DualPortBlkBoxMem(heapSize, Bool(), use_bram = true)
+  )
+  val regBusy    = RegInit(false.B)
+  val regArgId   = RegInit(0.U(3.W)) // hardcode this should be fine
+  val regSubMask = RegInit(false.B)
+  val needSplit  = WireInit(false.B)
+  val bBorrowed  = WireInit(false.B)
 
   // some shorthands
   def currentStk     = threadStacks(regInMain.stack_idx)

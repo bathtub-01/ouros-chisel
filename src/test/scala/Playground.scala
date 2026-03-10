@@ -12,9 +12,9 @@ class PlaySpec extends AnyFreeSpec with ChiselSim {
       new DualPortBlkBoxMem(
         1024,
         UInt(8.W),
-        true,
-        true,
-        getClass.getResource("/mem_init.hex").getPath(),
+        read_first_mode = false,
+        use_bram = true,
+        // getClass.getResource("/mem_init.hex").getPath(),
       )
     ) { dut =>
       dut.io.readwritePorts(0).enable.poke(true)
