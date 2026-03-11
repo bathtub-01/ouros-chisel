@@ -16,6 +16,8 @@ class BitsWithValid[T <: Data](t: T) extends Bundle {
 
 object Helper {
 
+  def nextPow2(i: Int): Int = 1 << log2Ceil(i)
+
   /** Cancel all the unique flags in an App */
   def dashApp(app: Vec[Atom]): Vec[Atom] = {
     val res = WireInit(app)
@@ -40,6 +42,7 @@ object Helper {
       app: Vec[Atom],
       arg_id: UInt,
       target: Vec[Atom],
+      targetLen: UInt,
       free_addr: UInt
   ): (Vec[Atom], Vec[Atom], Bool) = {
     val targetDashed = {
@@ -49,19 +52,40 @@ object Helper {
       }
       wire
     }
-    val targetLen = appLen(target)
-    val res       = WireInit(0.U.asTypeOf(Vec(2 * maxAppLen - 1, new Atom)))
-    when(arg_id === 0.U) {
-      for (i <- 0 until res.length) {
-        when(i.U < targetLen) {
-          res(i) := targetDashed(i.U)
-        }.elsewhen(i.U - targetLen + 1.U < maxAppLen.U) {
-          res(i) := app(i.U - targetLen + 1.U)
+    val shifted = Wire(Vec(2 * maxAppLen - 1, new Atom))
+    for (i <- 0 until shifted.length) {
+      // Mux tree: for each possible target length k, give the static
+      // connection result.
+      shifted(i) := MuxCase(
+        0.U.asTypeOf(new Atom),
+        (1 to maxAppLen).map { k =>
+          ((targetLen === k.U) -> {
+            if (i < k)
+              targetDashed(i)
+            else {
+              if (i - k + 1 < maxAppLen)
+                app(i - k + 1)
+              else 0.U.asTypeOf(new Atom)
+            }
+          })
         }
-      }
+      )
+    }
+
+    val res = Wire(Vec(2 * maxAppLen - 1, new Atom))
+    when(arg_id === 0.U) {
+      res := shifted
     }.otherwise {
-      res.zip(app).foreach { case (r, a) => r := a }
-      res(arg_id) := target(0)
+      // Copy app verbatim (static), then overwrite one slot
+      for (i <- 0 until res.length) {
+        if (i < app.length) {
+          if (i == 1 || i == 2)
+            res(i) := Mux(arg_id === i.U, target(0), app(i))
+          else
+            res(i) := app(i)
+        } else
+          res(i) := 0.U.asTypeOf(new Atom)
+      }
     }
     val res1 = Wire(Vec(maxAppLen, new Atom))
     val res2 = Wire(Vec(maxAppLen, new Atom))
@@ -181,8 +205,12 @@ object Helper {
    * arityOf(app(0)) >= appLen(app)
    */
   def isWHNF(app: Vec[Atom]): Bool =
-    // this is much simpler in hw
-    app(Helper.arityOf(app(0))).isNop()
+    MuxCase(
+      false.B,
+      (0 until maxAppLen).map { k =>
+        (arityOf(app(0)) === k.U) -> { app(k).isNop() }
+      }
+    )
 
   /**
    * Takes a sequence of Atoms, convert it into a full-sized Application.

@@ -32,8 +32,6 @@ class Ouros extends Module {
     val inject      = Flipped(Valid(Vec(maxAppLen, new Atom)))
     val inject_addr = Input(Addr)
     val done        = Output(Bool())
-    val noExist     = Output(Bool())
-    val realNon     = Output(Bool())
   })
 
   def getDest(app: Vec[Atom]): Dest.Type = {
@@ -89,8 +87,6 @@ class Ouros extends Module {
   val wireToAlu1 = wireGen
   val wireToAlu2 = wireGen
 
-  io.noExist                := dheap.io.non_exist
-  io.realNon                := dheap.io.real_non
   dheap.io.out_main.ready   := false.B
   dheap.io.out_sub.ready    := false.B
   reducr.io.out_spine.ready := false.B
@@ -141,8 +137,8 @@ class Ouros extends Module {
   val bufferDheapB1 = Queue(dheap.io.out_big_drf, bufferSize)
   val arbiterDheapB = Module(new Arbiter(new FrozenApp, 2))
 
-  val ringDheapB0 = Module(new Ring(bufferSize, Addr))
-  val ringDheapB1 = Module(new Ring(bufferSize, Addr))
+  val ringDheapB0 = Module(new Ring(nextPow2(bufferSize), Addr))
+  val ringDheapB1 = Module(new Ring(nextPow2(bufferSize), Addr))
 
   val bufferReducr0 = Queue(wireToReducr0, bufferSize) // from reducer
   val bufferReducr1 = Queue(wireToReducr1, bufferSize) // from dheap.main
