@@ -41,6 +41,8 @@ class GarbageCollector extends Module {
     val heap_read_addr = Valid(Addr)
     val heap_read      = Flipped(Valid(AppV))
     val monitor        = Flipped(Valid(new ActiveApp))
+    val monitor_drf    = Flipped(Valid(new Atom))
+    val monitor_drf_id = Input(UInt(log2Ceil(maxThreads).W))
     // ============ non-essential ports ===================
     val inject      = Input(Bool())
     val inject_addr = Input(Addr)
@@ -65,6 +67,7 @@ class GarbageCollector extends Module {
   val regMonitors   = RegInit(
     0.U.asTypeOf(Vec(maxThreads, new BitsWithValid(AppV)))
   )
+  val regMonitorIdx  = RegInit(0.U(log2Ceil(maxThreads + 1).W))
   val constSweepFrom = Reg(Addr)
   val realFreeHead   = Wire(Addr)
   val realWorkHead   = Wire(Addr)
@@ -111,6 +114,16 @@ class GarbageCollector extends Module {
   def findPtr(app: Vec[Atom]): UInt =
     zipWithIndex(app).indexWhere(p => p.idx > regAppIdx && p.bits.isPtr())
 
+  def moreMonitor(): Bool =
+    zipWithIndex(regMonitors).exists(p =>
+      p.idx >= regMonitorIdx && p.bits.valid
+    )
+
+  def findMonitor(): UInt =
+    zipWithIndex(regMonitors).indexWhere(p =>
+      p.idx >= regMonitorIdx && p.bits.valid
+    )
+
   def markRead(addr: UInt): Unit = {
     gcMem.readA(addr)
     // TODO gc cache
@@ -149,10 +162,11 @@ class GarbageCollector extends Module {
 
   def stepIdle(): Unit = {
     when(!mutatorRequest() && regFreeLen <= GcThreshold.U) {
-      regStm      := CollectorState.ROOT
-      regWorkHead := 0.U
-      regWorkLen  := 1.U
-      regSweeper  := 0.U
+      regStm        := CollectorState.ROOT
+      regWorkHead   := 0.U
+      regWorkLen    := 1.U
+      regSweeper    := 0.U
+      regMonitorIdx := 0.U
       gcMem.writeB(mkGCCell(CellState.WorkList, Some(0.U)), 0.U)
     }
   }
@@ -216,14 +230,21 @@ class GarbageCollector extends Module {
         markRead(regHpReader(found).getPtr())
         regAppIdx := found
         regPreGC  := true.B
-      }.elsewhen(regMonitors.exists(_.valid)) {
-        val pick = regMonitors.indexWhere(_.valid)
-        regMonitors(pick).valid := false.B
-        regPreGC                := false.B
-        regBkReader             := mkGCCell(CellState.Marked)
-        regHpReader             := regMonitors(pick).bits
-        regAppIdx               := 0.U
-        regMove                 := MarkMoves.HANDLE_APP
+      }.elsewhen(moreMonitor()) {
+        val pick       = findMonitor()
+        val monitorApp = regMonitors(pick).bits
+        // regMonitors(pick).valid := false.B
+        when(monitorApp(0).isPtr()) {
+          regPreGC := true.B
+          gcMem.readA(monitorApp(0).getPtr())
+        }.otherwise {
+          regPreGC    := false.B
+          regBkReader := mkGCCell(CellState.Marked)
+        }
+        regMonitorIdx := pick +& 1.U
+        regHpReader   := monitorApp
+        regAppIdx     := 0.U
+        regMove       := MarkMoves.HANDLE_APP
       }.otherwise {
         when(markThis) {
           val wHead = regHpReader(regAppIdx).getPtr()
@@ -300,9 +321,17 @@ class GarbageCollector extends Module {
   io.feedback.ready       := true.B
   io.heap_read_addr.valid := false.B
   io.heap_read_addr.bits  := DontCare
-  when(regStm =/= CollectorState.MARK && io.monitor.valid) {
-    regMonitors(io.monitor.bits.stack_idx).valid := true.B
-    regMonitors(io.monitor.bits.stack_idx).bits  := io.monitor.bits.app
+
+  when(regStm =/= CollectorState.MARK) {
+    when(io.monitor_drf.valid) {
+      regMonitors(io.monitor_drf_id).valid   := true.B
+      regMonitors(io.monitor_drf_id).bits(0) := io.monitor_drf.bits
+    }
+
+    when(io.monitor.valid) {
+      regMonitors(io.monitor.bits.stack_idx).valid := true.B
+      regMonitors(io.monitor.bits.stack_idx).bits  := io.monitor.bits.app
+    }
   }
 
   // initialise the free-list

@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.loadMemoryFromFileInline
 import chisel3.experimental.hierarchy.Instantiate
-import chisel3.util.experimental.{CIRCTSRAMParameter, CIRCTSRAMInterface}
+import chisel3.util.experimental.CIRCTSRAMParameter
 import _root_.circt.stage.ChiselStage
 
 /* Implement basic memory as an independant module. This helps Vivado to infer

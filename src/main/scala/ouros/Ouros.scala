@@ -211,6 +211,9 @@ class Ouros extends Module {
   dheap.io.gc_heap_read_addr :<= gc.io.heap_read_addr
   gc.io.monitor.valid         := reducr.io.out_spine.valid
   gc.io.monitor.bits          := reducr.io.out_spine.bits
+  gc.io.monitor_drf.valid     := dheap.io.out_big_drf.valid
+  gc.io.monitor_drf.bits      := dheap.io.out_big_drf.bits.app(0)
+  gc.io.monitor_drf_id        := dheap.io.out_main.bits.stack_idx
 
   // non-essential ports
   dheap.io.inject.valid  := io.inject_to === InjectTo.Heap && io.inject.valid
