@@ -62,15 +62,10 @@ object Main extends App with ChiselSim {
       Countdown,
       Fib,
       Mss,
-      Ordlist,
-      Permsort,
       Queens,
       Queens2,
       SumEuler,
-      Sumpuz,
-      Taut,
       Whilex,
-      // TreeSum,
     )
   )
 }
