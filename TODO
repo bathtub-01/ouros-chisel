@@ -1,0 +1,4 @@
+Required updates to catch up with the progression in the simulator:
+- spine split in the reducer
+- add `seq`
+- forwarding for singleton PTR (stack push + dealloc)
