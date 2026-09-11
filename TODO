@@ -1,3 +1,0 @@
-Required updates to catch up with the progression in the simulator:
-- add `seq`
-- forwarding for singleton PTR (stack push + dealloc)

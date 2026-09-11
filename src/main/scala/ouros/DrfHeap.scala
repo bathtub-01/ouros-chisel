@@ -420,6 +420,18 @@ class DrfHeap extends Module {
     }
     wire
   }
+
+  /**
+   * A fresh target can be forwarded directly when the current active App is
+   * nothing but a unique pointer to it. In that case the target cell has no
+   * other references, so we can keep evaluating it on the current stack without
+   * pushing its address, and return the target address to the GC.
+   */
+  def canForward: Bool =
+    appLen(regInMain.app) === 1.U &&
+      regInMain.app(0).isPtr() &&
+      regInMain.app(0).isUnique()
+
   def beingWaited: (Bool, UInt) = {
     val wireB = Wire(Bool())
     val wireI = Wire(UInt(log2Ceil(maxThreads).W))
@@ -545,7 +557,13 @@ class DrfHeap extends Module {
             wire
           }
         )
-        pushTarget(false.B)
+        when(canForward) {
+          // The singleton unique PTR is only an indirection.  Forward the
+          // target on the current stack and reclaim its old heap cell.
+          io.dealloc_addr.valid := true.B
+        }.otherwise {
+          pushTarget(false.B)
+        }
       }
     }
     switch(genIAs2) {
@@ -669,7 +687,6 @@ class DrfHeap extends Module {
     }
   }
 }
-
 object DrfHeap extends App {
   ChiselStage.emitSystemVerilogFile(
     new DrfHeap,
