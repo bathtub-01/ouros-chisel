@@ -120,7 +120,6 @@ class DrfHeap extends Module {
     val start       = Input(Bool())
     val done        = Output(Bool())
   })
-
   val busy         = RegInit(false.B)
   val stmMain      = RegInit(Stm.IDLE)
   val stmSub       = RegInit(StmSub.IDLE)
@@ -154,7 +153,6 @@ class DrfHeap extends Module {
   val regSubMask = RegInit(false.B)
   val needSplit  = WireInit(false.B)
   val bBorrowed  = WireInit(false.B)
-
   // some shorthands
   def currentStk     = threadStacks(regInMain.stack_idx)
   def currentFrmStk  = frameStacks(regInMain.stack_idx)
@@ -164,7 +162,6 @@ class DrfHeap extends Module {
   // connect Vec of ports to underlying moduels
   threadStacks.zip(_threadStacks).foreach { case (p, m) => p :<>= m.io }
   frameStacks.zip(_frameStacks).foreach { case (p, m) => p :<>= m.io }
-
   def mkHeapCell(app: Vec[Atom]) = {
     val wire = Wire(new HeapCell)
     wire.app    := app
@@ -181,13 +178,11 @@ class DrfHeap extends Module {
 
   def findMoreDmder(addr: UInt, stk: StackPort[StkCell]): Bool =
     stk.elms > 1.U && stk.top.addr === addr && !stk.snd.frame
-
   def findNewFrame(addr: UInt, stk: StackPort[StkCell]): Bool =
     stk.elms > 1.U && stk.top.addr === addr && stk.snd.frame
 
   def findFreeStk(addr: UInt, stk: StackPort[StkCell]): Bool =
     stk.elms === 0.U || (stk.top.frame && stk.top.addr === addr)
-
   def select1stArg(app: Vec[Atom]): (UInt, UInt) = {
     val (pos, ptr) = (Wire(UInt(2.W)), Wire(Addr))
     when(app(0).isPtr()) {
@@ -201,13 +196,17 @@ class DrfHeap extends Module {
         pos := 2.U
         ptr := app(2).toPtr().pointer
       }
-    }.otherwise { // save this for seq
+    }.elsewhen(app(0).isSeq()) {
+      // Canonical seq only demands its first argument.  Once that argument
+      // reaches WHNF, deref() drops it and exposes the second argument.
+      pos := 1.U
+      ptr := app(1).toPtr().pointer
+    }.otherwise {
       pos := 0.U
       ptr := app(0).toPtr().pointer
     }
     (pos, ptr)
   }
-
   def selectNextArg(app: Vec[Atom]): (UInt, UInt) =
     (2.U, app(2).toPtr().pointer)
 
@@ -221,7 +220,6 @@ class DrfHeap extends Module {
     wire(regInMain.stack_idx) := mainHeap.io.readwritePorts(0).address
     wire
   }
-
   def isSensitive(): Bool = {
     val sensitive1 = genIAs1 === IAs1.ExistIAWorkingNormal
     val sensitive2 = genIAs1 === IAs1.ExistIAFresh ||
@@ -230,7 +228,6 @@ class DrfHeap extends Module {
     val same2 = currentStk.top.addr === incomingStk.top.addr
     (sensitive1 && same1) || (sensitive2 && same2)
   }
-
   def writeIncoming(): Unit = {
     incomingStk.pop()
     mainHeap.writeA(
@@ -252,7 +249,6 @@ class DrfHeap extends Module {
     readTarget(ptr)
     regArgId := arg_id
   }
-
   def selectNextArgRead(app: Vec[Atom]): Unit = {
     val (arg_id, ptr) = selectNextArg(app)
     io.search := ptr
@@ -269,7 +265,6 @@ class DrfHeap extends Module {
     mainHeap.readA(threadStacks(stkId).snd.addr)
     regInMain.stack_idx := stkId
   }
-
   def putOutputMain(stk_idx: UInt, app: Vec[Atom]): Unit = {
     io.out_main.valid := true.B
     io.out_main.bits  := Helper.mkActiveApp(stk_idx, app)
@@ -284,7 +279,6 @@ class DrfHeap extends Module {
     workingHeap.writeB(true.B, regAddr)
     currentStk.push(mkStkCell(new_frame, regAddr))
   }
-
   def cancelNewFrame(): Unit = {
     when(
       genIAs1 === IAs1.ExistWHNF ||
@@ -303,7 +297,6 @@ class DrfHeap extends Module {
       nextMain()
     }
   }
-
   // generate the CONSUMEs signal under current state
   def genCONSUMEs: CONSUMEs.Type = {
     val wire = Wire(CONSUMEs())
@@ -326,7 +319,6 @@ class DrfHeap extends Module {
     }
     wire
   }
-
   // generate the WHNFs signal under current state
   def genWHNFs: WHNFs.Type = {
     val wire = Wire(WHNFs())
@@ -341,7 +333,6 @@ class DrfHeap extends Module {
     }
     wire
   }
-
   // generate the RESUMEs signal under current state
   def genRESUMEs: RESUMEs.Type = {
     val wire = Wire(RESUMEs())
@@ -352,7 +343,6 @@ class DrfHeap extends Module {
     }
     wire
   }
-
   // generate the IAs1 signal under current state
   def genIAs1: IAs1.Type = {
     val wire = Wire(IAs1())
@@ -375,7 +365,6 @@ class DrfHeap extends Module {
     }
     wire
   }
-
   // generate the IAs2 signal under current state
   def genIAs2: IAs2.Type = {
     val target_in_whnf: Bool =
@@ -388,7 +377,6 @@ class DrfHeap extends Module {
       genIAs1 === IAs1.ExistWHNF || genIAs1 === IAs1.ExistIAWorkingNewFrame
     val more_strict_args: Bool =
       regInMain.app(0).isPrm() && regArgId === 1.U && regInMain.app(2).isPtr()
-
     val wire = Wire(IAs2())
     when(more_strict_args && local_stk) {
       wire := IAs2.NextStrictArgLocal
@@ -398,8 +386,9 @@ class DrfHeap extends Module {
       when(
         (regInMain.app(0).isPtr() ||
           (regInMain.app(0).isPrm() &&
-            (regInMain.app(1).isInt() || regInMain.app(2).isInt())))
-          && target_in_whnf
+            (regInMain.app(1).isInt() || regInMain.app(2).isInt())) ||
+          regInMain.app(0).isSeq()) &&
+          target_in_whnf
       ) {
         wire := IAs2.NoMoreArgsCanEmit
       }.otherwise {
@@ -408,7 +397,6 @@ class DrfHeap extends Module {
     }
     wire
   }
-
   def canAvoidUpdate: Bool = {
     val wire = WireInit(false.B)
     switch(mainHeap.readOutA.app(0).atomType) {
@@ -424,10 +412,14 @@ class DrfHeap extends Module {
           }
         }
       }
+      is(AtomType.SEQ) {
+        when(mainHeap.readOutA.app(1).isPtr()) {
+          wire := mainHeap.readOutA.app(1).isUnique()
+        }
+      }
     }
     wire
   }
-
   def beingWaited: (Bool, UInt) = {
     val wireB = Wire(Bool())
     val wireI = Wire(UInt(log2Ceil(maxThreads).W))
@@ -443,7 +435,6 @@ class DrfHeap extends Module {
     }
     (wireB, wireI)
   }
-
   // consume the next input
   def nextMain(): Unit = {
     io.in_main.ready := io.free_addr.valid
@@ -477,7 +468,6 @@ class DrfHeap extends Module {
       }
     }
   }
-
   def stepWHNF(): Unit = {
     val dmder  = mainHeap.readOutA.app
     val target = regInMain.app
@@ -486,7 +476,6 @@ class DrfHeap extends Module {
       deref(dmder, select1stArg(dmder)._1, target, regTgtLen, regFreeAddr.bits)
 
     putOutputMain(regInMain.stack_idx, dres1)
-
     switch(genWHNFs) {
       is(WHNFs.MoreDmders) {
         findPopRead(findMoreDmder(regAddr, _), false)
@@ -515,7 +504,6 @@ class DrfHeap extends Module {
         nextMain()
       }
     }
-
     when(is_big) {
       needSplit                     := true.B
       io.out_big_drf.bits.heap_addr := regFreeAddr.bits
@@ -529,7 +517,6 @@ class DrfHeap extends Module {
     val target                 = mainHeap.readOutA
     val (dres1, dres2, is_big) =
       deref(dmder, regArgId, target.app, target.appLen, regFreeAddr.bits)
-
     switch(genIAs1) {
       is(IAs1.NoExist) {
         pushTarget(false.B)
@@ -561,7 +548,6 @@ class DrfHeap extends Module {
         pushTarget(false.B)
       }
     }
-
     switch(genIAs2) {
       is(IAs2.NextStrictArgNewStk) {
         selectNextArgRead(updated_dmder)
@@ -589,7 +575,6 @@ class DrfHeap extends Module {
       }
     }
   }
-
   def stepRESUME(): Unit = {
     bBorrowed := true.B
     writeBack()
@@ -607,7 +592,6 @@ class DrfHeap extends Module {
       }
     }
   }
-
   // give default connection
   threadStacks.foreach(s => s.init())
   frameStacks.foreach(s => s.init())
@@ -630,7 +614,6 @@ class DrfHeap extends Module {
   regGCGranted          := false.B
   io.gc_heap_read.valid := regGCGranted
   io.gc_heap_read.bits  := mainHeap.readOutB.app
-
   // program injection & start/end control
   when(!busy && io.inject.valid) {
     mainHeap.writeB(
@@ -646,7 +629,6 @@ class DrfHeap extends Module {
     frameStacks(0).push(0.U.asTypeOf(Vec(maxThreads, Addr)))
     putOutputMain(0.U, appBuilder(8, ptrBuilder(0, false)))
   }
-
   when(io.in_main.fire) {
     when(
       threadStacks(0).elms === 1.U &&
@@ -656,7 +638,6 @@ class DrfHeap extends Module {
       busy := false.B
     }
   }
-
   // NOTE assume the output of DrfHeap is never blocked.
   //   This is possible as long as the length of its output buffer
   //   is not smaller than maxThreads.
@@ -667,7 +648,6 @@ class DrfHeap extends Module {
       is(Stm.IA) { stepIA() }
       is(Stm.RESUME) { stepRESUME() }
     }
-
     io.in_sub.ready           := !bBorrowed
     io.out_sub.valid          := io.in_sub.fire && beingWaited._1
     io.out_sub.bits.stack_idx := beingWaited._2

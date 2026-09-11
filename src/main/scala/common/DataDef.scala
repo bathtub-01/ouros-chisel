@@ -13,7 +13,9 @@ import Helper._
  *   - INT: integer
  *   - PRM: primitive op
  *   - Y: Y combinator
+ *   - ARG: combinator argument
  *   - ERR: error code
+ *   - SEQ: Haskell seq primitive
  */
 object AtomType extends ChiselEnum {
   val NOP = Value
@@ -24,6 +26,7 @@ object AtomType extends ChiselEnum {
   val Y   = Value
   val ARG = Value
   val ERR = Value
+  val SEQ = Value
 }
 
 abstract class AtomPayload extends Bundle
@@ -78,22 +81,21 @@ class ArgPayload extends AtomPayload {
 }
 
 class Atom extends Bundle {
-  val atomType = AtomType()
-  val payload  = Bits(atomPayloadSize.W)
-
+  val atomType            = AtomType()
+  val payload             = Bits(atomPayloadSize.W)
   def toPrm(): PrmPayload = this.payload.asTypeOf(new PrmPayload)
   def toInt(): IntPayload = this.payload.asTypeOf(new IntPayload)
   def toCom(): ComPayload = this.payload.asTypeOf(new ComPayload)
   def toPtr(): PtrPayload = this.payload.asTypeOf(new PtrPayload)
   def toArg(): ArgPayload = this.payload.asTypeOf(new ArgPayload)
-
-  def isNop(): Bool = this.atomType === AtomType.NOP
-  def isPtr(): Bool = this.atomType === AtomType.PTR
-  def isCom(): Bool = this.atomType === AtomType.COM
-  def isY(): Bool   = this.atomType === AtomType.Y
-  def isInt(): Bool = this.atomType === AtomType.INT
-  def isPrm(): Bool = this.atomType === AtomType.PRM
-  def isArg(): Bool = this.atomType === AtomType.ARG
+  def isNop(): Bool       = this.atomType === AtomType.NOP
+  def isPtr(): Bool       = this.atomType === AtomType.PTR
+  def isCom(): Bool       = this.atomType === AtomType.COM
+  def isY(): Bool         = this.atomType === AtomType.Y
+  def isInt(): Bool       = this.atomType === AtomType.INT
+  def isPrm(): Bool       = this.atomType === AtomType.PRM
+  def isArg(): Bool       = this.atomType === AtomType.ARG
+  def isSeq(): Bool       = this.atomType === AtomType.SEQ
 
   /** whether this is a unique PTR */
   def isUnique(): Bool = this.isPtr() && this.toPtr().unique
@@ -114,7 +116,6 @@ class Atom extends Bundle {
   /** assume this Atom is a PTR */
   def getPtr(): UInt = this.payload.asTypeOf(new PtrPayload).pointer
 }
-
 class ActiveApp extends Bundle {
   val stack_idx = UInt(log2Ceil(maxThreads).W)
   val app       = AppV

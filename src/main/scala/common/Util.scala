@@ -71,9 +71,19 @@ object Helper {
         }
       )
     }
-
     val res = Wire(Vec(2 * maxAppLen - 1, new Atom))
-    when(arg_id === 0.U) {
+    when(app(0).isSeq()) {
+      // Canonical seq semantics: once the first argument reaches WHNF,
+      // discard it and continue with the second argument (plus any
+      // over-application tail).  The dereferenced target is intentionally
+      // not inserted into the result.
+      for (i <- 0 until res.length) {
+        if (i + 2 < maxAppLen)
+          res(i) := app(i + 2)
+        else
+          res(i) := 0.U.asTypeOf(new Atom)
+      }
+    }.elsewhen(arg_id === 0.U) {
       res := shifted
     }.otherwise {
       // Copy app verbatim (static), then overwrite one slot
@@ -90,7 +100,6 @@ object Helper {
     val res1 = Wire(Vec(maxAppLen, new Atom))
     val res2 = Wire(Vec(maxAppLen, new Atom))
     val resB = Wire(Bool())
-
     when(res(maxAppLen).isNop()) {
       res1 := res.slice(0, maxAppLen)
       res2 := DontCare
@@ -129,7 +138,6 @@ object Helper {
         buildTree(s.grouped(2).map { case Seq(l, r) => tri(l, r) }.toSeq)
       }
     }
-
     val tree = buildTree(v.zipWithIndex.map { case (t, i) => (p(t), i.U) }).head
     tri(tree, (false.B, v.length.U))
   }
@@ -195,6 +203,9 @@ object Helper {
       }
       is(AtomType.Y) {
         res := 1.U
+      }
+      is(AtomType.SEQ) {
+        res := 2.U
       }
     }
     res
@@ -350,7 +361,6 @@ object Helper {
         )
         .asUInt
     )
-
   def strToOp(op: String): (AluOpCode.Type, Boolean, Boolean) = {
     op match {
       case "+"  => (AluOpCode.add_sub, false, false)
@@ -403,6 +413,13 @@ object Helper {
       _.payload  -> 0.U
     )
 
+  /** Literal SEQ builder */
+  def seqBuilder(): Atom =
+    (new Atom).Lit(
+      _.atomType -> AtomType.SEQ,
+      _.payload  -> 0.U
+    )
+
   def appBuilder(length: Int, atoms: Atom*): Vec[Atom] =
     Vec.Lit(padWith(atoms.toSeq, length, nopBuilder): _*)
 
@@ -415,7 +432,6 @@ object Helper {
   def Addr = UInt(log2Ceil(heapSize).W)
 
   def AppV = Vec(maxAppLen, new Atom)
-
   def mkActiveApp(stk_id: UInt, app: Vec[Atom]): ActiveApp = {
     val wire = Wire(new ActiveApp)
     wire.stack_idx := stk_id
@@ -434,7 +450,6 @@ object Helper {
     val bits = t
     val idx  = UInt(w)
   }
-
   def zipWithIndex[T <: Data](vec: Vec[T], t: T): Vec[Pair[T]] =
     VecInit(
       vec.zipWithIndex.map { case (bits, idx) =>
