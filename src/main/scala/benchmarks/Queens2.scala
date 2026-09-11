@@ -5,7 +5,7 @@ import chisel3.Vec
  
 object Queens2 extends Benchmark {
 override def toString() = "Queens2" 
-val combinatorCount = 42
+val combinatorCount = 49
 val heap_img = Seq(
 // AExp0
 appBuilder( // 0
@@ -14,30 +14,30 @@ intBuilder(5),
 ),
 // AExp1
 appBuilder( // 1
-comBuilder(3,40),
+comBuilder(2,37),
 ptrBuilder(5, false, false),
 ),
 appBuilder( // 2
-comBuilder(4,15),
+comBuilder(4,14),
 intBuilder(2),
 comBuilder(2,0),
 ),
 appBuilder( // 3
-comBuilder(4,15),
+comBuilder(4,14),
 intBuilder(1),
 ptrBuilder(2, false, false),
 ),
 appBuilder( // 4
-comBuilder(1,44),
+comBuilder(1,40),
 ptrBuilder(3, false, false),
 ),
 appBuilder( // 5
-comBuilder(2,42),
+comBuilder(2,38),
 ptrBuilder(4, false, false),
 ),
 // AExp2
 appBuilder( // 6
-comBuilder(1,51),
+comBuilder(1,47),
 ptrBuilder(8, false, false),
 ),
 appBuilder( // 7
@@ -45,12 +45,12 @@ prmBuilder("=="),
 intBuilder(2),
 ),
 appBuilder( // 8
-comBuilder(1,79),
+comBuilder(2,72),
 ptrBuilder(7, false, false),
 ),
 // AExp3
 appBuilder( // 9
-comBuilder(2,81),
+comBuilder(2,73),
 ptrBuilder(11, false, false),
 ),
 appBuilder( // 10
@@ -58,12 +58,12 @@ prmBuilder("=="),
 intBuilder(0),
 ),
 appBuilder( // 11
-comBuilder(1,79),
+comBuilder(2,72),
 ptrBuilder(10, false, false),
 ),
 // AExp4
 appBuilder( // 12
-comBuilder(2,72),
+comBuilder(2,66),
 ptrBuilder(14, false, false),
 ),
 appBuilder( // 13
@@ -71,7 +71,7 @@ prmBuilder("=="),
 intBuilder(1),
 ),
 appBuilder( // 14
-comBuilder(1,79),
+comBuilder(2,72),
 ptrBuilder(13, false, false),
 ),
 // AExp5
@@ -92,12 +92,12 @@ argBuilder(1, true),
 ),
 // AExp2
 appBuilder( // 2
-comBuilder(2,16),
+comBuilder(1,16),
 argBuilder(0, false),
 ptrBuilder(0, true, true),
 ),
 appBuilder( // 3
-comBuilder(2,88),
+comBuilder(2,81),
 argBuilder(0, false),
 comBuilder(2,0),
 ),
@@ -112,430 +112,413 @@ argBuilder(0, true),
 ),
 // AExp4
 appBuilder( // 6
-argBuilder(0, true),
+argBuilder(3, true),
 ptrBuilder(0, true, true),
+argBuilder(1, true),
 ),
 appBuilder( // 7
 prmBuilder("+"),
-argBuilder(1, true),
+argBuilder(2, true),
 intBuilder(1),
 ),
 // AExp5
 appBuilder( // 8
 argBuilder(2, true),
-argBuilder(1, false),
-ptrBuilder(0, true, true),
-),
-appBuilder( // 9
-comBuilder(3,6),
+comBuilder(2,0),
+comBuilder(4,6),
+argBuilder(1, true),
 argBuilder(0, true),
-argBuilder(1, false),
 ),
 // AExp6
-appBuilder( // 10
-comBuilder(2,55),
+appBuilder( // 9
+comBuilder(2,51),
 ptrBuilder(0, true, true),
 ),
-appBuilder( // 11
+appBuilder( // 10
 prmBuilder("-"),
 argBuilder(0, true),
 intBuilder(1),
 ),
 // AExp7
-appBuilder( // 12
-comBuilder(1,24),
+appBuilder( // 11
+comBuilder(1,22),
 ptrBuilder(1, true, true),
 ptrBuilder(0, true, true),
 ),
-appBuilder( // 13
-comBuilder(1,38),
+appBuilder( // 12
+comBuilder(1,35),
 argBuilder(1, true),
 ),
-appBuilder( // 14
-comBuilder(1,10),
+appBuilder( // 13
+comBuilder(1,9),
 argBuilder(0, true),
 ),
 // AExp8
-appBuilder( // 15
+appBuilder( // 14
 argBuilder(3, true),
 argBuilder(0, true),
 argBuilder(1, true),
 ),
 // AExp9
+appBuilder( // 15
+comBuilder(4,14),
+comBuilder(2,0),
+comBuilder(2,0),
+),
+// AExp10
 appBuilder( // 16
 prmBuilder("=="),
 argBuilder(0, false),
 intBuilder(0),
-ptrBuilder(1, true, true),
-ptrBuilder(0, true, true),
-),
-appBuilder( // 17
-comBuilder(4,15),
-comBuilder(2,0),
-comBuilder(2,0),
-),
-appBuilder( // 18
-comBuilder(2,12),
+comBuilder(2,11),
+comBuilder(2,15),
 argBuilder(0, false),
-argBuilder(1, true),
-),
-// AExp10
-appBuilder( // 19
-comBuilder(2,30),
-ptrBuilder(1, true, true),
-ptrBuilder(0, true, true),
-),
-appBuilder( // 20
-argBuilder(1, true),
-argBuilder(3, true),
-),
-appBuilder( // 21
-argBuilder(0, true),
-argBuilder(2, true),
 ),
 // AExp11
-appBuilder( // 22
-argBuilder(2, true),
+appBuilder( // 17
 comBuilder(2,0),
-ptrBuilder(0, true, true),
-),
-appBuilder( // 23
-comBuilder(4,19),
-argBuilder(0, true),
-argBuilder(1, true),
 ),
 // AExp12
-appBuilder( // 24
-yBuilder(),
+appBuilder( // 18
+comBuilder(2,27),
+ptrBuilder(1, true, true),
 ptrBuilder(0, true, true),
 ),
-appBuilder( // 25
-comBuilder(3,22),
+appBuilder( // 19
+argBuilder(3, true),
+argBuilder(1, true),
+),
+appBuilder( // 20
+argBuilder(2, true),
 argBuilder(0, true),
 ),
 // AExp13
-appBuilder( // 26
-comBuilder(4,15),
-argBuilder(1, true),
-ptrBuilder(0, true, true),
-),
-appBuilder( // 27
-argBuilder(0, true),
+appBuilder( // 21
 argBuilder(2, true),
+comBuilder(2,17),
+comBuilder(4,18),
+argBuilder(0, true),
+argBuilder(1, true),
 ),
 // AExp14
-appBuilder( // 28
-argBuilder(2, true),
+appBuilder( // 22
+yBuilder(),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 23
+comBuilder(3,21),
+argBuilder(0, true),
+),
+// AExp15
+appBuilder( // 24
+comBuilder(4,14),
 argBuilder(0, true),
 ptrBuilder(0, true, true),
 ),
-appBuilder( // 29
-comBuilder(3,26),
+appBuilder( // 25
+argBuilder(3, true),
 argBuilder(1, true),
 ),
-// AExp15
-appBuilder( // 30
+// AExp16
+appBuilder( // 26
+argBuilder(2, true),
+comBuilder(2,0),
+comBuilder(4,24),
+argBuilder(0, true),
+argBuilder(1, true),
+),
+// AExp17
+appBuilder( // 27
 yBuilder(),
 ptrBuilder(0, true, true),
 argBuilder(0, true),
 ),
-appBuilder( // 31
-comBuilder(3,28),
+appBuilder( // 28
+comBuilder(3,26),
 argBuilder(1, true),
 ),
-// AExp16
+// AExp18
+appBuilder( // 29
+comBuilder(1,47),
+ptrBuilder(1, true, true),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 30
+comBuilder(1,35),
+argBuilder(1, true),
+),
+appBuilder( // 31
+comBuilder(4,14),
+argBuilder(0, true),
+),
+// AExp19
 appBuilder( // 32
-comBuilder(1,51),
+comBuilder(2,27),
 ptrBuilder(1, true, true),
 ptrBuilder(0, true, true),
 ),
 appBuilder( // 33
-comBuilder(1,38),
-argBuilder(1, true),
-),
-appBuilder( // 34
-comBuilder(4,15),
-argBuilder(0, true),
-),
-// AExp17
-appBuilder( // 35
-comBuilder(2,30),
-ptrBuilder(1, true, true),
-ptrBuilder(0, true, true),
-),
-appBuilder( // 36
-comBuilder(2,32),
+comBuilder(2,29),
 argBuilder(0, false),
 argBuilder(1, false),
 ),
-appBuilder( // 37
+appBuilder( // 34
 ptrBuilder(1, false, false),
 argBuilder(0, false),
 argBuilder(1, false),
 ),
-// AExp18
-appBuilder( // 38
-argBuilder(0, true),
-comBuilder(2,0),
-comBuilder(2,35),
-),
-// AExp19
-appBuilder( // 39
-comBuilder(2,0),
-),
 // AExp20
-appBuilder( // 40
-argBuilder(1, true),
-ptrBuilder(0, true, true),
-comBuilder(2,39),
-),
-appBuilder( // 41
+appBuilder( // 35
 argBuilder(0, true),
-argBuilder(2, true),
+comBuilder(2,0),
+comBuilder(2,32),
 ),
 // AExp21
-appBuilder( // 42
-comBuilder(4,15),
+appBuilder( // 36
+comBuilder(2,0),
+),
+// AExp22
+appBuilder( // 37
+argBuilder(1, true),
+argBuilder(0, true),
+comBuilder(3,36),
+),
+// AExp23
+appBuilder( // 38
+comBuilder(4,14),
 ptrBuilder(0, true, true),
 comBuilder(2,0),
 ),
-appBuilder( // 43
+appBuilder( // 39
 argBuilder(0, true),
 argBuilder(1, true),
 ),
-// AExp22
-appBuilder( // 44
-comBuilder(4,15),
+// AExp24
+appBuilder( // 40
+comBuilder(4,14),
 ptrBuilder(0, true, true),
 ),
-appBuilder( // 45
-comBuilder(4,15),
+appBuilder( // 41
+comBuilder(4,14),
 intBuilder(0),
 argBuilder(0, true),
 ),
-// AExp23
-appBuilder( // 46
-comBuilder(4,15),
+// AExp25
+appBuilder( // 42
+comBuilder(2,0),
+),
+// AExp26
+appBuilder( // 43
+comBuilder(4,14),
 ptrBuilder(1, true, true),
 ptrBuilder(0, true, true),
 ),
-appBuilder( // 47
-argBuilder(1, true),
+appBuilder( // 44
 argBuilder(3, true),
+argBuilder(1, true),
 ),
-appBuilder( // 48
+appBuilder( // 45
+argBuilder(2, true),
 argBuilder(0, true),
-argBuilder(2, true),
 ),
-// AExp24
-appBuilder( // 49
+// AExp27
+appBuilder( // 46
 argBuilder(2, true),
-comBuilder(2,0),
-ptrBuilder(0, true, true),
-),
-appBuilder( // 50
-comBuilder(4,46),
+comBuilder(2,42),
+comBuilder(4,43),
 argBuilder(0, true),
 argBuilder(1, true),
 ),
-// AExp25
-appBuilder( // 51
+// AExp28
+appBuilder( // 47
 yBuilder(),
 ptrBuilder(0, true, true),
 ),
-appBuilder( // 52
-comBuilder(3,49),
+appBuilder( // 48
+comBuilder(3,46),
 argBuilder(0, true),
 ),
-// AExp26
-appBuilder( // 53
-comBuilder(2,16),
+// AExp29
+appBuilder( // 49
+comBuilder(1,16),
 argBuilder(0, true),
 ptrBuilder(0, true, true),
 ),
-appBuilder( // 54
-comBuilder(1,61),
+appBuilder( // 50
+comBuilder(1,57),
 argBuilder(1, true),
 ),
-// AExp27
-appBuilder( // 55
-comBuilder(1,51),
+// AExp30
+appBuilder( // 51
+comBuilder(1,47),
 ptrBuilder(1, true, true),
 ptrBuilder(0, true, true),
 ),
-appBuilder( // 56
-comBuilder(2,53),
+appBuilder( // 52
+comBuilder(2,49),
 argBuilder(0, true),
 argBuilder(1, false),
 ),
-appBuilder( // 57
-comBuilder(4,15),
+appBuilder( // 53
+comBuilder(4,14),
 argBuilder(1, false),
 ),
-// AExp28
-appBuilder( // 58
-comBuilder(2,70),
+// AExp31
+appBuilder( // 54
+comBuilder(1,65),
 ptrBuilder(1, true, true),
 ptrBuilder(0, true, true),
 ),
-appBuilder( // 59
+appBuilder( // 55
 ptrBuilder(9, false, false),
 argBuilder(0, false),
 ),
-appBuilder( // 60
+appBuilder( // 56
 ptrBuilder(6, false, false),
 argBuilder(0, false),
 ),
-// AExp29
+// AExp32
+appBuilder( // 57
+comBuilder(1,65),
+ptrBuilder(1, true, true),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 58
+ptrBuilder(12, false, false),
+argBuilder(0, false),
+),
+appBuilder( // 59
+comBuilder(1,54),
+argBuilder(0, false),
+),
+// AExp33
+appBuilder( // 60
+comBuilder(2,0),
+),
+// AExp34
 appBuilder( // 61
-comBuilder(2,70),
+comBuilder(4,14),
 ptrBuilder(1, true, true),
 ptrBuilder(0, true, true),
 ),
 appBuilder( // 62
-ptrBuilder(12, false, false),
-argBuilder(0, false),
+comBuilder(1,65),
+argBuilder(3, true),
+argBuilder(1, true),
 ),
 appBuilder( // 63
-comBuilder(1,58),
-argBuilder(0, false),
-),
-// AExp30
-appBuilder( // 64
-comBuilder(4,15),
-ptrBuilder(1, true, true),
-ptrBuilder(0, true, true),
-),
-appBuilder( // 65
-comBuilder(2,70),
-argBuilder(1, true),
-argBuilder(3, true),
-),
-appBuilder( // 66
-comBuilder(2,30),
-argBuilder(0, true),
+comBuilder(2,27),
 argBuilder(2, true),
-),
-// AExp31
-appBuilder( // 67
 argBuilder(0, true),
-ptrBuilder(1, true, true),
-ptrBuilder(0, true, true),
-),
-appBuilder( // 68
-comBuilder(4,64),
-argBuilder(1, false),
-argBuilder(2, false),
-),
-appBuilder( // 69
-comBuilder(4,15),
-argBuilder(1, false),
-argBuilder(2, false),
-),
-// AExp32
-appBuilder( // 70
-argBuilder(0, true),
-comBuilder(2,0),
-ptrBuilder(0, true, true),
-),
-appBuilder( // 71
-comBuilder(3,67),
-argBuilder(1, true),
-),
-// AExp33
-appBuilder( // 72
-comBuilder(4,15),
-comBuilder(2,0),
-ptrBuilder(0, true, true),
-),
-appBuilder( // 73
-comBuilder(1,51),
-argBuilder(0, true),
-argBuilder(1, true),
-),
-// AExp34
-appBuilder( // 74
-argBuilder(0, true),
-argBuilder(2, false),
-ptrBuilder(1, true, true),
-ptrBuilder(0, true, true),
-),
-appBuilder( // 75
-comBuilder(4,15),
-argBuilder(2, false),
-comBuilder(2,0),
-),
-appBuilder( // 76
-argBuilder(1, true),
-argBuilder(3, true),
 ),
 // AExp35
-appBuilder( // 77
+appBuilder( // 64
 argBuilder(2, true),
-comBuilder(2,0),
-ptrBuilder(0, true, true),
-),
-appBuilder( // 78
-comBuilder(4,74),
+comBuilder(4,14),
+comBuilder(4,61),
 argBuilder(0, true),
 argBuilder(1, true),
 ),
 // AExp36
-appBuilder( // 79
-yBuilder(),
-ptrBuilder(0, true, true),
-),
-appBuilder( // 80
-comBuilder(3,77),
+appBuilder( // 65
 argBuilder(0, true),
+comBuilder(1,60),
+comBuilder(3,64),
 ),
 // AExp37
-appBuilder( // 81
-comBuilder(1,51),
-argBuilder(0, true),
+appBuilder( // 66
+comBuilder(4,14),
+comBuilder(2,0),
 ptrBuilder(0, true, true),
 ),
-appBuilder( // 82
-comBuilder(1,83),
+appBuilder( // 67
+comBuilder(1,47),
+argBuilder(0, true),
 argBuilder(1, true),
 ),
 // AExp38
-appBuilder( // 83
+appBuilder( // 68
+comBuilder(2,0),
+),
+// AExp39
+appBuilder( // 69
+comBuilder(2,72),
+),
+// AExp40
+appBuilder( // 70
+comBuilder(4,14),
+argBuilder(0, true),
+comBuilder(2,0),
+),
+// AExp41
+appBuilder( // 71
+argBuilder(2, false),
+argBuilder(0, false),
+comBuilder(1,69),
+comBuilder(3,70),
+argBuilder(0, false),
+argBuilder(2, false),
+argBuilder(1, true),
+),
+// AExp42
+appBuilder( // 72
+argBuilder(1, true),
+comBuilder(1,68),
+comBuilder(3,71),
+argBuilder(0, true),
+),
+// AExp43
+appBuilder( // 73
+comBuilder(1,47),
+argBuilder(0, true),
+ptrBuilder(0, true, true),
+),
+appBuilder( // 74
+comBuilder(1,75),
+argBuilder(1, true),
+),
+// AExp44
+appBuilder( // 75
 argBuilder(0, true),
 comBuilder(2,0),
 comBuilder(2,1),
 ),
-// AExp39
-appBuilder( // 84
-comBuilder(2,88),
+// AExp45
+appBuilder( // 76
+comBuilder(2,0),
+),
+// AExp46
+appBuilder( // 77
+comBuilder(2,81),
 ptrBuilder(0, true, true),
 ),
-appBuilder( // 85
+appBuilder( // 78
 prmBuilder("-"),
 argBuilder(0, true),
 intBuilder(1),
 ),
-// AExp40
-appBuilder( // 86
-comBuilder(4,15),
+// AExp47
+appBuilder( // 79
+comBuilder(4,14),
 argBuilder(1, false),
 ptrBuilder(0, true, true),
 ),
-appBuilder( // 87
-comBuilder(1,84),
+appBuilder( // 80
+comBuilder(1,77),
 argBuilder(0, true),
 argBuilder(1, false),
 ),
-// AExp41
-appBuilder( // 88
+// AExp48
+appBuilder( // 81
 prmBuilder("<="),
 argBuilder(0, false),
 intBuilder(0),
+comBuilder(1,0),
+comBuilder(1,76),
 ptrBuilder(0, true, true),
-comBuilder(2,0),
 ),
-appBuilder( // 89
-comBuilder(2,86),
+appBuilder( // 82
+comBuilder(2,79),
 argBuilder(0, false),
 argBuilder(1, true),
 ),
