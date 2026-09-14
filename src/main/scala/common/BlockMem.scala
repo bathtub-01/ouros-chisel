@@ -7,9 +7,31 @@ import chisel3.experimental.hierarchy.Instantiate
 import chisel3.util.experimental.CIRCTSRAMParameter
 import _root_.circt.stage.ChiselStage
 
+import scala.collection.immutable.SeqMap
+import scala.util.DynamicVariable
+
+/**
+ * Elaboration-time program-memory selection.
+ *
+ * DrfHeap and Reducer intentionally do not need FPGA-specific constructor
+ * arguments.  Ouros places their construction inside `withFiles`, and the
+ * memory wrappers recognise the program heap/combinator memories by their
+ * configured depth/width.
+ */
+case class ProgramMemoryFiles(heapHex: String, combHex: String)
+
+object ProgramMemoryContext {
+  private val current =
+    new DynamicVariable[Option[ProgramMemoryFiles]](None)
+
+  def withFiles[A](files: ProgramMemoryFiles)(body: => A): A =
+    current.withValue(Some(files))(body)
+
+  private[common] def files: Option[ProgramMemoryFiles] = current.value
+}
+
 /* Implement basic memory as an independant module. This helps Vivado to infer
  * memory as BRAM instead of LUT RAM. */
-
 class MemIOBundle[T <: Data](depth: Int, t: T) extends Bundle {
   val rdAddr = Input(UInt(log2Ceil(depth).W))
   val rdData = Output(t)
@@ -18,16 +40,33 @@ class MemIOBundle[T <: Data](depth: Int, t: T) extends Bundle {
   val wrAddr = Input(UInt(log2Ceil(depth).W))
 }
 
-class BlockMem[T <: Data](depth: Int, t: T) extends Module {
+class BlockMem[T <: Data](
+    depth: Int,
+    t: T,
+    init_hex: String = "",
+) extends Module {
   val io = IO(new MemIOBundle(depth, t))
 
   val mem = SyncReadMem(depth, t)
+
+  private val appWidth = SystemConfig.maxAppLen * SystemConfig.atomSize
+  private val contextualInit =
+    ProgramMemoryContext.files
+      .filter(_ => depth == SystemConfig.progSize && t.getWidth == appWidth)
+      .map(_.combHex)
+      .getOrElse("")
+  private val effectiveInit =
+    if (init_hex.trim.nonEmpty) init_hex else contextualInit
+
+  if (effectiveInit.trim.nonEmpty) {
+    loadMemoryFromFileInline(mem, effectiveInit)
+  }
+
   io.rdData := mem.read(io.rdAddr)
 
   when(io.wrEna) {
     mem.write(io.wrAddr, io.wrData)
   }
-
   def write(data: T, addr: UInt) = {
     io.wrEna  := true.B
     io.wrData := data
@@ -53,7 +92,6 @@ class RomIO[T <: Data](depth: Int, t: T) extends Bundle {
   val rdAddr = Input(UInt(log2Ceil(depth).W))
   val rdData = Output(t)
 }
-
 /* We use ROM (Vec) for program memory, this module has the same read/write
  * timing as BlockMem. */
 class BlockMemRom[T <: Data](depth: Int, t: T)(bin: Seq[T]) extends Module {
@@ -62,7 +100,6 @@ class BlockMemRom[T <: Data](depth: Int, t: T)(bin: Seq[T]) extends Module {
   val mem = VecInit(bin)
   io.rdData := RegNext(mem(io.rdAddr))
 }
-
 // Multiple port memory, check https://www.chisel-lang.org/docs/explanations/memories#sram
 class MultiPortBlockMem[T <: Data](n: Int, depth: Int, t: T) extends Module {
   val io = IO(new SRAMInterface(depth, t, 0, 0, n))
@@ -72,7 +109,6 @@ class MultiPortBlockMem[T <: Data](n: Int, depth: Int, t: T) extends Module {
 class DualPortBlockMem[T <: Data](depth: Int, t: T) extends Module {
   val io = IO(new SRAMInterface(depth, t, 0, 0, 2))
   io :<>= SRAM(depth, t, 0, 0, 2, HexMemoryFile("all_zero.hex"))
-
   def init() = {
     io.readwritePorts.foreach { p =>
       p        := DontCare
@@ -87,7 +123,6 @@ class DualPortBlockMem[T <: Data](depth: Int, t: T) extends Module {
   }
 
   def readOutA = io.readwritePorts(0).readData
-
   def writeA(data: T, addr: UInt) = {
     io.readwritePorts(0).enable    := true.B
     io.readwritePorts(0).isWrite   := true.B
@@ -102,7 +137,6 @@ class DualPortBlockMem[T <: Data](depth: Int, t: T) extends Module {
   }
 
   def readOutB = io.readwritePorts(1).readData
-
   def writeB(data: T, addr: UInt) = {
     io.readwritePorts(1).enable    := true.B
     io.readwritePorts(1).isWrite   := true.B
@@ -112,8 +146,6 @@ class DualPortBlockMem[T <: Data](depth: Int, t: T) extends Module {
 }
 
 /** Steal from CIRCTSRAMInterface.scala to lift a shared clock. */
-
-import scala.collection.immutable.SeqMap
 
 class MyReadWritePort(memoryParameter: CIRCTSRAMParameter) extends Record {
   val address   = Input(UInt(log2Ceil(memoryParameter.depth).W))
@@ -125,7 +157,6 @@ class MyReadWritePort(memoryParameter: CIRCTSRAMParameter) extends Record {
   val writeEnable = Input(Bool())
   val readData    = Output(UInt(memoryParameter.width.W))
   val enable      = Input(Bool())
-
   // Records store elements in reverse order
   val elements: SeqMap[String, Data] = (SeqMap(
     "addr"  -> address,
@@ -142,7 +173,6 @@ class MyInterface(memoryParameter: CIRCTSRAMParameter) extends Record {
     elements
       .getOrElse(s"RW$idx", throw new Exception(s"Cannot get port RW$idx"))
       .asInstanceOf[MyReadWritePort]
-
   // Records store elements in reverse order
   val elements: SeqMap[String, Data] =
     (Seq
@@ -156,7 +186,6 @@ class MyInterface(memoryParameter: CIRCTSRAMParameter) extends Record {
 class SRAMReadFirstBlackbox(
     parameter: CIRCTSRAMParameter,
 ) extends FixedIOExtModule(new MyInterface(parameter)) { self =>
-
   private val verilogInterface: String =
     (Seq("input clock") +: Seq
       .tabulate(parameter.readwrite)(idx =>
@@ -170,11 +199,9 @@ class SRAMReadFirstBlackbox(
         )
       )).flatten
       .mkString(",\n")
-
   def flip(i: Int) =
     if (i == 0) { 1 }
     else { 0 }
-
   private val rwLogic = Seq
     .tabulate(parameter.readwrite) { idx =>
       val prefix = s"RW${idx}"
@@ -190,7 +217,6 @@ class SRAMReadFirstBlackbox(
         Seq(s"end // ${prefix}")
     }
     .flatten
-
   private val init_logic =
     Seq(
       s"""(* ram_style = "block" *) reg [${parameter.width - 1}:0] Memory[0:${parameter.depth - 1}];""",
@@ -205,7 +231,6 @@ class SRAMReadFirstBlackbox(
   private val logic = (init_logic ++ rwLogic).mkString("\n")
 
   override def desiredName = parameter.moduleName ++ "rf"
-
   setInline(
     desiredName + ".sv",
     s"""module ${parameter.moduleName}rf(
@@ -222,8 +247,14 @@ class SRAMReadFirstBlackbox(
  */
 class SRAMBlackbox(
     parameter: CIRCTSRAMParameter,
-    use_bram: Boolean = true
+    use_bram: Boolean = true,
+    init_hex: String = "",
+    init_zero: Boolean = false,
 ) extends FixedIOExtModule(new MyInterface(parameter)) { self =>
+  require(
+    !(init_hex.trim.nonEmpty && init_zero),
+    "SRAMBlackbox cannot use init_hex and init_zero at the same time"
+  )
 
   private val verilogInterface: String =
     (Seq("input clock") +: Seq
@@ -238,7 +269,6 @@ class SRAMBlackbox(
         )
       )).flatten
       .mkString(",\n")
-
   private val rwLogic = Seq
     .tabulate(parameter.readwrite) { idx =>
       val prefix = s"RW${idx}"
@@ -255,21 +285,41 @@ class SRAMBlackbox(
     }
     .flatten
 
-  private val init_logic =
+  private val memoryDecl =
     if (use_bram) {
-      Seq(
-        s"""(* ram_style = "block" *) reg [${parameter.width - 1}:0] Memory[0:${parameter.depth - 1}];"""
-      )
+      s"""(* ram_style = "block" *) reg [${parameter.width - 1}:0] Memory[0:${parameter.depth - 1}];"""
     } else {
-      Seq(
-        s"""(* ram_style = "ultra" *) reg [${parameter.width - 1}:0] Memory[0:${parameter.depth - 1}];"""
-      )
+      s"""(* ram_style = "ultra" *) reg [${parameter.width - 1}:0] Memory[0:${parameter.depth - 1}];"""
     }
 
-  private val logic = (init_logic ++ rwLogic).mkString("\n")
+  private val escapedInitHex =
+    init_hex.replace("\\", "\\\\").replace("\"", "\\\"")
+
+  private val initLogic =
+    if (init_hex.trim.nonEmpty) {
+      Seq(
+        memoryDecl,
+        "initial begin",
+        s"""  $$readmemh("${escapedInitHex}", Memory);""",
+        "end"
+      )
+    } else if (init_zero) {
+      Seq(
+        memoryDecl,
+        "initial begin",
+        "integer i;",
+        s"  for (i = 0; i < ${parameter.depth}; i = i + 1) begin",
+        "    Memory[i] = '0;",
+        "  end",
+        "end"
+      )
+    } else {
+      Seq(memoryDecl)
+    }
+
+  private val logic = (initLogic ++ rwLogic).mkString("\n")
 
   override def desiredName = parameter.moduleName
-
   setInline(
     desiredName + ".sv",
     s"""module ${parameter.moduleName}(
@@ -288,15 +338,43 @@ class BlkBoxMemIO[T <: Data](depth: Int, t: T) extends Bundle {
   val isWrite   = Input(Bool())
   val writeData = Input(t)
 }
-
 class DualPortBlkBoxMem[T <: Data](
     depth: Int,
     t: T,
     read_first_mode: Boolean = false,
     use_bram: Boolean = false,
     init_hex: String = "",
+    init_zero: Boolean = false,
 ) extends Module {
-  val io  = IO(new SRAMInterface(depth, t, 0, 0, 2))
+  val io = IO(new SRAMInterface(depth, t, 0, 0, 2))
+
+  private val appWidth = SystemConfig.maxAppLen * SystemConfig.atomSize
+  private val heapCellWidth =
+    appWidth + log2Ceil(SystemConfig.maxAppLen + 1)
+
+  private val isProgramHeap =
+    !read_first_mode &&
+      depth == SystemConfig.heapSize &&
+      t.getWidth == heapCellWidth
+  private val isWorkingHeap =
+    !read_first_mode &&
+      depth == SystemConfig.heapSize &&
+      t.getWidth == 1
+
+  private val contextualFiles = ProgramMemoryContext.files
+  private val effectiveInitHex =
+    if (init_hex.trim.nonEmpty) init_hex
+    else if (isProgramHeap) contextualFiles.map(_.heapHex).getOrElse("")
+    else ""
+
+  // The FPGA flow uses BRAM for the program heap and initializes the one-bit
+  // working heap to zero.  The GC read-first bookkeeping RAM keeps its own
+  // special initializer and is deliberately excluded above.
+  private val effectiveUseBram =
+    use_bram || (isProgramHeap && contextualFiles.nonEmpty)
+  private val effectiveInitZero =
+    init_zero || (isWorkingHeap && contextualFiles.nonEmpty)
+
   val mem =
     if (read_first_mode)
       Instantiate(
@@ -324,14 +402,14 @@ class DualPortBlkBoxMem[T <: Data](
             t.getWidth,
             0
           ),
-          use_bram
+          effectiveUseBram,
+          effectiveInitHex,
+          effectiveInitZero,
         )
       )
-
   private def flip(i: Int) =
     if (i == 0) { 1 }
     else { 0 }
-
   mem.io.clock := this.clock
   val regFwd     = Seq.fill(2)(RegInit(false.B))
   val regWritten = Seq.fill(2)(Reg(t))
@@ -350,7 +428,6 @@ class DualPortBlkBoxMem[T <: Data](
     mem.io.RW(i).writeData   := io.readwritePorts(i).writeData.asUInt
     mem.io.RW(i).writeEnable := io.readwritePorts(i).isWrite
   }
-
   def init() = {
     io.readwritePorts.foreach { p =>
       p        := DontCare
@@ -365,7 +442,6 @@ class DualPortBlkBoxMem[T <: Data](
   }
 
   def readOutA = io.readwritePorts(0).readData
-
   def writeA(data: T, addr: UInt) = {
     io.readwritePorts(0).enable    := true.B
     io.readwritePorts(0).isWrite   := true.B
@@ -380,7 +456,6 @@ class DualPortBlkBoxMem[T <: Data](
   }
 
   def readOutB = io.readwritePorts(1).readData
-
   def writeB(data: T, addr: UInt) = {
     io.readwritePorts(1).enable    := true.B
     io.readwritePorts(1).isWrite   := true.B
@@ -388,7 +463,6 @@ class DualPortBlkBoxMem[T <: Data](
     io.readwritePorts(1).address   := addr
   }
 }
-
 object DualPortBlkBoxMem extends App {
   ChiselStage.emitSystemVerilogFile(
     new DualPortBlkBoxMem(

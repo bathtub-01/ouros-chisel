@@ -361,3 +361,6 @@ filter
 
 # some vivado stuff..
 *.jou
+
+# artifacts for FPGA
+fpga-gen/
