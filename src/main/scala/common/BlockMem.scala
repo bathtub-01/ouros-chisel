@@ -2,7 +2,6 @@ package common
 
 import chisel3._
 import chisel3.util._
-import chisel3.util.experimental.loadMemoryFromFileInline
 import chisel3.experimental.hierarchy.Instantiate
 import chisel3.util.experimental.CIRCTSRAMParameter
 import _root_.circt.stage.ChiselStage
@@ -30,6 +29,68 @@ object ProgramMemoryContext {
   private[common] def files: Option[ProgramMemoryFiles] = current.value
 }
 
+/**
+ * Inline implementation used for an initialized BlockMem.
+ *
+ * Chisel's loadMemoryFromFileInline currently emits the $readmemh behind
+ * `ifdef ENABLE_INITIAL_MEM_.  That works for some simulation flows, but
+ * Vivado does not define that macro when synthesizing this project.  Emit the
+ * initialization directly instead so that the contents become BRAM INIT data.
+ *
+ * Semantics match BlockMem's SyncReadMem use: synchronous read, with an
+ * independent write address/enable.
+ */
+class InitializedBlockMemIO(depth: Int, width: Int) extends Bundle {
+  val clock  = Input(Clock())
+  val rdAddr = Input(UInt(log2Ceil(depth).W))
+  val rdData = Output(UInt(width.W))
+  val wrEna  = Input(Bool())
+  val wrData = Input(UInt(width.W))
+  val wrAddr = Input(UInt(log2Ceil(depth).W))
+}
+
+class InitializedBlockMemBlackbox(
+    depth: Int,
+    width: Int,
+    init_hex: String,
+) extends FixedIOExtModule(new InitializedBlockMemIO(depth, width)) {
+  require(init_hex.trim.nonEmpty, "initialized memory requires an init file")
+
+  private val escapedInitHex =
+    init_hex.replace("\\", "\\\\").replace("\"", "\\\"")
+
+  override def desiredName = s"mem_${depth}x${width}"
+
+  setInline(
+    desiredName + ".sv",
+    s"""module ${desiredName}(
+       |  input  wire                      clock,
+       |  input  wire [${log2Ceil(depth) - 1}:0] rdAddr,
+       |  output reg  [${width - 1}:0]      rdData,
+       |  input  wire                      wrEna,
+       |  input  wire [${width - 1}:0]      wrData,
+       |  input  wire [${log2Ceil(depth) - 1}:0] wrAddr
+       |);
+       |
+       |  (* ram_style = "block" *)
+       |  reg [${width - 1}:0] Memory [0:${depth - 1}];
+       |
+       |  initial begin
+       |    $$readmemh("${escapedInitHex}", Memory);
+       |  end
+       |
+       |  always @(posedge clock) begin
+       |    rdData <= Memory[rdAddr];
+       |    if (wrEna) begin
+       |      Memory[wrAddr] <= wrData;
+       |    end
+       |  end
+       |
+       |endmodule
+       |""".stripMargin
+  )
+}
+
 /* Implement basic memory as an independant module. This helps Vivado to infer
  * memory as BRAM instead of LUT RAM. */
 class MemIOBundle[T <: Data](depth: Int, t: T) extends Bundle {
@@ -47,8 +108,6 @@ class BlockMem[T <: Data](
 ) extends Module {
   val io = IO(new MemIOBundle(depth, t))
 
-  val mem = SyncReadMem(depth, t)
-
   private val appWidth = SystemConfig.maxAppLen * SystemConfig.atomSize
   private val contextualInit =
     ProgramMemoryContext.files
@@ -59,13 +118,30 @@ class BlockMem[T <: Data](
     if (init_hex.trim.nonEmpty) init_hex else contextualInit
 
   if (effectiveInit.trim.nonEmpty) {
-    loadMemoryFromFileInline(mem, effectiveInit)
-  }
+    val mem = Instantiate(
+      new InitializedBlockMemBlackbox(
+        depth = depth,
+        width = t.getWidth,
+        init_hex = effectiveInit,
+      )
+    )
 
-  io.rdData := mem.read(io.rdAddr)
+    mem.io.clock  := clock
+    mem.io.rdAddr := io.rdAddr
+    io.rdData     := mem.io.rdData.asTypeOf(t)
+    mem.io.wrEna  := io.wrEna
+    mem.io.wrData := io.wrData.asUInt
+    mem.io.wrAddr := io.wrAddr
+  } else {
+    // Preserve the original memory implementation for the ordinary
+    // non-preinitialized/simulation flow.
+    val mem = SyncReadMem(depth, t)
 
-  when(io.wrEna) {
-    mem.write(io.wrAddr, io.wrData)
+    io.rdData := mem.read(io.rdAddr)
+
+    when(io.wrEna) {
+      mem.write(io.wrAddr, io.wrData)
+    }
   }
   def write(data: T, addr: UInt) = {
     io.wrEna  := true.B
