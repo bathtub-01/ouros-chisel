@@ -128,7 +128,7 @@ class DrfHeap extends Module {
   val regTgtLen    = RegInit(0.U(log2Ceil(maxAppLen + 1).W))
   val regAddr      = RegInit(0.U.asTypeOf(Addr))
   val regIAddr     = RegInit(0.U.asTypeOf(Addr))
-  val regNoExist   = RegNext(io.found)
+  val regNoExist   = RegNext(io.found, false.B)
   val regFreeAddr  = RegInit(0.U.asTypeOf(new BitsWithValid(Addr)))
   val regGCGranted = RegInit(false.B)
   val threadStacks = Wire(
@@ -148,7 +148,6 @@ class DrfHeap extends Module {
   val workingHeap = Module(
     new DualPortBlkBoxMem(heapSize, Bool(), use_bram = true)
   )
-  val regBusy    = RegInit(false.B)
   val regArgId   = RegInit(0.U(3.W)) // hardcode this should be fine
   val regSubMask = RegInit(false.B)
   val needSplit  = WireInit(false.B)

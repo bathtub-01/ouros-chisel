@@ -13,9 +13,9 @@ import scala.util.DynamicVariable
  * Elaboration-time program-memory selection.
  *
  * DrfHeap and Reducer intentionally do not need FPGA-specific constructor
- * arguments.  Ouros places their construction inside `withFiles`, and the
- * memory wrappers recognise the program heap/combinator memories by their
- * configured depth/width.
+ * arguments. Ouros places their construction inside `withFiles`, and the memory
+ * wrappers recognise the program heap/combinator memories by their configured
+ * depth/width.
  */
 case class ProgramMemoryFiles(heapHex: String, combHex: String)
 
@@ -32,10 +32,10 @@ object ProgramMemoryContext {
 /**
  * Inline implementation used for an initialized BlockMem.
  *
- * Chisel's loadMemoryFromFileInline currently emits the $readmemh behind
- * `ifdef ENABLE_INITIAL_MEM_.  That works for some simulation flows, but
- * Vivado does not define that macro when synthesizing this project.  Emit the
- * initialization directly instead so that the contents become BRAM INIT data.
+ * Chisel's loadMemoryFromFileInline currently emits the $readmemh behind `ifdef
+ * ENABLE_INITIAL_MEM_. That works for some simulation flows, but Vivado does
+ * not define that macro when synthesizing this project. Emit the initialization
+ * directly instead so that the contents become BRAM INIT data.
  *
  * Semantics match BlockMem's SyncReadMem use: synchronous read, with an
  * independent write address/enable.
@@ -108,7 +108,7 @@ class BlockMem[T <: Data](
 ) extends Module {
   val io = IO(new MemIOBundle(depth, t))
 
-  private val appWidth = SystemConfig.maxAppLen * SystemConfig.atomSize
+  private val appWidth       = SystemConfig.maxAppLen * SystemConfig.atomSize
   private val contextualInit =
     ProgramMemoryContext.files
       .filter(_ => depth == SystemConfig.progSize && t.getWidth == appWidth)
@@ -198,7 +198,7 @@ class DualPortBlockMem[T <: Data](depth: Int, t: T) extends Module {
     io.readwritePorts(0).address := addr
   }
 
-  def readOutA = io.readwritePorts(0).readData
+  def readOutA                    = io.readwritePorts(0).readData
   def writeA(data: T, addr: UInt) = {
     io.readwritePorts(0).enable    := true.B
     io.readwritePorts(0).isWrite   := true.B
@@ -212,7 +212,7 @@ class DualPortBlockMem[T <: Data](depth: Int, t: T) extends Module {
     io.readwritePorts(1).address := addr
   }
 
-  def readOutB = io.readwritePorts(1).readData
+  def readOutB                    = io.readwritePorts(1).readData
   def writeB(data: T, addr: UInt) = {
     io.readwritePorts(1).enable    := true.B
     io.readwritePorts(1).isWrite   := true.B
@@ -424,7 +424,7 @@ class DualPortBlkBoxMem[T <: Data](
 ) extends Module {
   val io = IO(new SRAMInterface(depth, t, 0, 0, 2))
 
-  private val appWidth = SystemConfig.maxAppLen * SystemConfig.atomSize
+  private val appWidth      = SystemConfig.maxAppLen * SystemConfig.atomSize
   private val heapCellWidth =
     appWidth + log2Ceil(SystemConfig.maxAppLen + 1)
 
@@ -437,7 +437,7 @@ class DualPortBlkBoxMem[T <: Data](
       depth == SystemConfig.heapSize &&
       t.getWidth == 1
 
-  private val contextualFiles = ProgramMemoryContext.files
+  private val contextualFiles  = ProgramMemoryContext.files
   private val effectiveInitHex =
     if (init_hex.trim.nonEmpty) init_hex
     else if (isProgramHeap) contextualFiles.map(_.heapHex).getOrElse("")
@@ -517,7 +517,7 @@ class DualPortBlkBoxMem[T <: Data](
     io.readwritePorts(0).address := addr
   }
 
-  def readOutA = io.readwritePorts(0).readData
+  def readOutA                    = io.readwritePorts(0).readData
   def writeA(data: T, addr: UInt) = {
     io.readwritePorts(0).enable    := true.B
     io.readwritePorts(0).isWrite   := true.B
@@ -531,24 +531,11 @@ class DualPortBlkBoxMem[T <: Data](
     io.readwritePorts(1).address := addr
   }
 
-  def readOutB = io.readwritePorts(1).readData
+  def readOutB                    = io.readwritePorts(1).readData
   def writeB(data: T, addr: UInt) = {
     io.readwritePorts(1).enable    := true.B
     io.readwritePorts(1).isWrite   := true.B
     io.readwritePorts(1).writeData := data
     io.readwritePorts(1).address   := addr
   }
-}
-object DualPortBlkBoxMem extends App {
-  ChiselStage.emitSystemVerilogFile(
-    new DualPortBlkBoxMem(
-      1024,
-      UInt(8.W),
-      true,
-      true,
-      "/home/bathtuub/workspace/ouros-chisel/mem_init.hex",
-    ),
-    Array("--target-dir", "sv-gen"),
-    firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info")
-  )
 }

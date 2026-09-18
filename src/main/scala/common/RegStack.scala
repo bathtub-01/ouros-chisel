@@ -108,7 +108,7 @@ class RegStack[T <: Data](depth: Int, t: T) extends Module {
       when(justPushed) {
         sndElm := lastPushed
       }.otherwise {
-        sndElm := stkMem.readOut
+        sndElm := Mux(elmCount > 2.U, stkMem.readOut, 0.U.asTypeOf(t))
       }
       when(elmCount > 2.U) {
         stkPtr := stkPtr - 1.U

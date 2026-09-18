@@ -58,7 +58,7 @@ class GarbageCollector extends Module {
   val regFreeLen    = RegInit(heapSize.U(log2Ceil(heapSize + 1).W))
   val regWorkLen    = RegInit(0.U(log2Ceil(heapSize + 1).W))
   val regSweeper    = RegInit(0.U.asTypeOf(Addr))
-  val regMove       = Reg(MarkMoves())
+  val regMove       = RegInit(MarkMoves.POP_WORKLIST)
   val regPreGC      = RegInit(false.B)
   val regHpReader   = RegInit(0.U.asTypeOf(AppV))
   val regBkReader   = RegInit(0.U.asTypeOf(new GCCell))
@@ -68,7 +68,7 @@ class GarbageCollector extends Module {
     0.U.asTypeOf(Vec(maxThreads, new BitsWithValid(AppV)))
   )
   val regMonitorIdx  = RegInit(0.U(log2Ceil(maxThreads + 1).W))
-  val constSweepFrom = Reg(Addr)
+  val constSweepFrom = RegInit(0.U.asTypeOf(Addr))
   val realFreeHead   = Wire(Addr)
   val realWorkHead   = Wire(Addr)
   val bkReadOut      = {
