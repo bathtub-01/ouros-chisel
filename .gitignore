@@ -364,3 +364,4 @@ filter
 
 # artifacts for FPGA
 fpga-gen/
+fpga-sim/
