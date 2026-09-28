@@ -27,8 +27,10 @@ import Dest._
  */
 class Ouros(program: ProgramImage) extends Module {
   val io = IO(new Bundle {
-    val start = Input(Bool())
-    val done  = Output(Bool())
+    val start        = Input(Bool())
+    val done         = Output(Bool())
+    val result_valid = Output(Bool())
+    val result       = Output(UInt(atomSize.W))
   })
 
   def getDest(app: Vec[Atom]): Dest.Type = {
@@ -102,7 +104,16 @@ class Ouros(program: ProgramImage) extends Module {
   when(runStarted && dheap.io.done) {
     doneReg := true.B
   }
-  io.done := doneReg
+  io.done         := doneReg
+  io.result_valid := dheap.io.result_valid
+
+  // INT payloads are atomPayloadSize-bit two's-complement values. Expose a
+  // conventional 32-bit signed representation for the board/UART side.
+  val resultPayload = dheap.io.result_atom.payload
+  io.result := Cat(
+    Fill(atomSize - atomPayloadSize, resultPayload(atomPayloadSize - 1)),
+    resultPayload,
+  )
 
   val wireFreeAddr = {
     val wire = Wire(DecoupledIO(Addr))
@@ -294,13 +305,15 @@ class PowerOnReset
 }
 
 /**
- * FPGA-facing top level: clock + one-bit start + one-bit done, with no reset
- * pin.  `start` may simply be tied high for an automatic one-go boot.
+ * FPGA-facing top level. `start` may simply be tied high for an automatic
+ * one-go boot. The final INT result remains stable once result_valid rises.
  */
 class OurosFpga(program: ProgramImage) extends RawModule {
-  val clock = IO(Input(Clock()))
-  val start = IO(Input(Bool()))
-  val done  = IO(Output(Bool()))
+  val clock        = IO(Input(Clock()))
+  val start        = IO(Input(Bool()))
+  val done         = IO(Output(Bool()))
+  val result_valid = IO(Output(Bool()))
+  val result       = IO(Output(UInt(atomSize.W)))
 
   val por = Module(new PowerOnReset)
   por.io.clock := clock
@@ -311,4 +324,6 @@ class OurosFpga(program: ProgramImage) extends RawModule {
 
   core.io.start := start
   done          := core.io.done
+  result_valid  := core.io.result_valid
+  result        := core.io.result
 }

@@ -117,10 +117,14 @@ class DrfHeap extends Module {
     // ============ non-essential ports ===================
     val inject      = Flipped(Valid(Vec(maxAppLen, new Atom)))
     val inject_addr = Input(Addr)
-    val start       = Input(Bool())
-    val done        = Output(Bool())
+    val start        = Input(Bool())
+    val done         = Output(Bool())
+    val result_valid = Output(Bool())
+    val result_atom  = Output(new Atom)
   })
   val busy         = RegInit(false.B)
+  val resultValid  = RegInit(false.B)
+  val resultAtom   = RegInit(0.U.asTypeOf(new Atom))
   val stmMain      = RegInit(Stm.IDLE)
   val stmSub       = RegInit(StmSub.IDLE)
   val regInMain    = RegInit(0.U.asTypeOf(new ActiveApp))
@@ -631,6 +635,8 @@ class DrfHeap extends Module {
   regGCGranted          := false.B
   io.gc_heap_read.valid := regGCGranted
   io.gc_heap_read.bits  := mainHeap.readOutB.app
+  io.result_valid       := resultValid
+  io.result_atom        := resultAtom
   // program injection & start/end control
   when(!busy && io.inject.valid) {
     mainHeap.writeB(
@@ -642,7 +648,9 @@ class DrfHeap extends Module {
   io.done := !busy
 
   when(io.start && !busy) {
-    busy := true.B
+    busy        := true.B
+    resultValid := false.B
+    resultAtom  := 0.U.asTypeOf(new Atom)
     frameStacks(0).push(0.U.asTypeOf(Vec(maxThreads, Addr)))
     putOutputMain(0.U, appBuilder(8, ptrBuilder(0, false)))
   }
@@ -652,7 +660,9 @@ class DrfHeap extends Module {
         io.in_main.bits.stack_idx === 0.U &&
         isWHNF(io.in_main.bits.app)
     ) {
-      busy := false.B
+      resultAtom  := io.in_main.bits.app(0)
+      resultValid := true.B
+      busy        := false.B
     }
   }
   // NOTE assume the output of DrfHeap is never blocked.

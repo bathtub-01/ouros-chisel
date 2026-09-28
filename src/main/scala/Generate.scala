@@ -72,6 +72,6 @@ object Generate {
     println(s"  heap cells: ${program.heapWords}")
     println()
     println("Add every generated *.sv plus heap.mem and comb.mem to Vivado.")
-    println("The FPGA-facing top has clock, start, and done; there is no reset pin.")
+    println("The FPGA-facing top has clock, start, done, result_valid, and result; there is no reset pin.")
   }
 }
