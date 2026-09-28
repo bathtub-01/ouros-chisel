@@ -6,7 +6,7 @@ import chisel3.util._
 object SystemConfig {
 
   /** size of an Atom */
-  val atomSize = 32
+  val atomSize = atomPayloadSize + AtomType.getWidth
 
   /** maximum arity of a structured combinator */
   val comArity = 7
@@ -44,7 +44,7 @@ object SystemConfig {
   /** whether the ALU block is pipelined */
   val AluPipe: Boolean = false
 
-  val atomPayloadSize = atomSize - AtomType.getWidth
+  val atomPayloadSize = AtomType.getWidth // atomSize - AtomType.getWidth
 
   /**
    * When the free cells are lesser than (GCAt * heapSize), a GC round is
