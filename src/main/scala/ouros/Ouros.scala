@@ -16,23 +16,25 @@ object Dest extends ChiselEnum {
   val ToReducr = Value
 }
 import Dest._
-
 /**
  * An Ouros core with a pre-initialised program.
  *
- * Externally the core only needs start/done (plus Chisel's internal
- * clock/reset).  On the first start request it first replays the statically
- * occupied heap addresses into the GC bookkeeping state, then starts graph
- * reduction.  A second start is intentionally ignored: this is a one-go core.
+ * On the first start request it first replays the statically occupied heap
+ * addresses into the GC bookkeeping state, then starts graph reduction.  A
+ * second start is intentionally ignored: this is a one-go core.
  */
 class Ouros(program: ProgramImage) extends Module {
+  require(
+    atomPayloadSize == 32,
+    s"The FPGA result/UART path currently requires a 32-bit Atom payload, got $atomPayloadSize bits",
+  )
+
   val io = IO(new Bundle {
     val start        = Input(Bool())
     val done         = Output(Bool())
     val result_valid = Output(Bool())
-    val result       = Output(UInt(atomSize.W))
+    val result       = Output(UInt(32.W))
   })
-
   def getDest(app: Vec[Atom]): Dest.Type = {
     val wire = Wire(Dest())
     when(app(0).isPrm() && app(1).isInt() && app(2).isInt()) {
@@ -51,7 +53,6 @@ class Ouros(program: ProgramImage) extends Module {
     wire.valid := false.B
     wire
   }
-
   // Keep the FPGA-specific file selection out of DrfHeap and Reducer.  Their
   // memory constructors are elaborated while this dynamic context is active.
   private val programModules =
@@ -64,7 +65,6 @@ class Ouros(program: ProgramImage) extends Module {
   val alu     = Module(new Alu(pipelined = AluPipe))
   val gc      = Module(new GarbageCollector)
   val addrBox = Module(new AddrBox)
-
   // ============ power-up / one-go control =============
   val startSeen   = RegInit(false.B)
   val gcBooting   = RegInit(false.B)
@@ -79,7 +79,6 @@ class Ouros(program: ProgramImage) extends Module {
     gcBooting  := true.B
     gcBootAddr := 0.U
   }
-
   // Reproduce the bookkeeping side of the old heap-injection path.  heap.mem
   // has already populated the BRAM, so only GC metadata is touched here.
   gc.io.inject      := false.B
@@ -90,14 +89,13 @@ class Ouros(program: ProgramImage) extends Module {
     gc.io.inject_addr := gcBootAddr
 
     when(gcBootAddr === (program.heapWords - 1).U) {
-      gcBooting  := false.B
-      gcBootDone := true.B
+      gcBooting   := false.B
+      gcBootDone  := true.B
       launchPulse := true.B
     }.otherwise {
       gcBootAddr := gcBootAddr + 1.U
     }
   }
-
   when(launchPulse) {
     runStarted := true.B
   }
@@ -106,14 +104,7 @@ class Ouros(program: ProgramImage) extends Module {
   }
   io.done         := doneReg
   io.result_valid := dheap.io.result_valid
-
-  // INT payloads are atomPayloadSize-bit two's-complement values. Expose a
-  // conventional 32-bit signed representation for the board/UART side.
-  val resultPayload = dheap.io.result_atom.payload
-  io.result := Cat(
-    Fill(atomSize - atomPayloadSize, resultPayload(atomPayloadSize - 1)),
-    resultPayload,
-  )
+  io.result       := dheap.io.result_atom.payload
 
   val wireFreeAddr = {
     val wire = Wire(DecoupledIO(Addr))
@@ -131,7 +122,6 @@ class Ouros(program: ProgramImage) extends Module {
   val wireToReducr1 = wireGen
   val wireToReducr2 = wireGen
   val wireToReducr3 = wireGen
-
   val wireToAlu0 = wireGen
   val wireToAlu1 = wireGen
   val wireToAlu2 = wireGen
@@ -139,7 +129,6 @@ class Ouros(program: ProgramImage) extends Module {
   dheap.io.out_sub.ready    := false.B
   reducr.io.out_spine.ready := false.B
   alu.io.out.ready          := false.B
-
   // sub-modules -> buffers
   dheap.io.out_main.ready := true.B
   when(dheap.io.out_main.valid) {
@@ -164,7 +153,6 @@ class Ouros(program: ProgramImage) extends Module {
       is(ToReducr) { wireToReducr0 :<>= reducr.io.out_spine }
     }
   }
-
   when(alu.io.out.valid) {
     when(isWHNF(alu.io.out.bits.app)) { wireToDheapA2 :<>= alu.io.out }
       .otherwise { wireToReducr2 :<>= alu.io.out }
@@ -173,7 +161,6 @@ class Ouros(program: ProgramImage) extends Module {
   val bufferDealloc  = Queue(dheap.io.dealloc_addr, 2)
   val bufferFreeAddr = Queue(wireFreeAddr, 2)
   val bufferFeedBack = Queue(addrBox.io.feedback_to_gc, 2)
-
   val bufferDheapA0 = Queue(wireToDheapA0, bufferSize) // from dheap.main
   val bufferDheapA1 = Queue(wireToDheapA1, bufferSize) // from reducer
   val bufferDheapA2 = Queue(wireToDheapA2, bufferSize) // from alu
@@ -182,7 +169,6 @@ class Ouros(program: ProgramImage) extends Module {
   val bufferDheapB0 = Queue(reducr.io.out_app, bufferSize) // from reducer
   val bufferDheapB1 = Queue(dheap.io.out_big_drf, bufferSize)
   val arbiterDheapB = Module(new Arbiter(new FrozenApp, 2))
-
   val ringDheapB0 = Module(new Ring(nextPow2(bufferSize), Addr))
   val ringDheapB1 = Module(new Ring(nextPow2(bufferSize), Addr))
   val bufferReducr0 = Queue(wireToReducr0, bufferSize) // from reducer
@@ -194,7 +180,6 @@ class Ouros(program: ProgramImage) extends Module {
   val bufferAlu1 = Queue(wireToAlu1, bufferSize) // from dheap.main
   val bufferAlu2 = Queue(wireToAlu2, bufferSize) // from dheap.sub
   val arbiterAlu = Module(new Arbiter(new ActiveApp, 3))
-
   // buffers -> arbiters
   arbiterDheapA.io.in
     .zip(
@@ -212,7 +197,6 @@ class Ouros(program: ProgramImage) extends Module {
       Seq(bufferReducr0, bufferReducr1, bufferReducr2, bufferReducr3)
     )
     .foreach { case (a, b) => a :<>= b }
-
   arbiterAlu.io.in
     .zip(Seq(bufferAlu0, bufferAlu1, bufferAlu2))
     .foreach { case (a, b) => a :<>= b }
@@ -222,7 +206,6 @@ class Ouros(program: ProgramImage) extends Module {
   dheap.io.in_sub  :<>= arbiterDheapB.io.out
   reducr.io.in     :<>= arbiterReducr.io.out
   alu.io.in        :<>= arbiterAlu.io.out
-
   // search-found logic
   reducr.io.search        := dheap.io.search
   ringDheapB0.io.search   := dheap.io.search
@@ -235,7 +218,6 @@ class Ouros(program: ProgramImage) extends Module {
   ringDheapB1.io.out_fire := bufferDheapB1.fire
   dheap.io.found :=
     reducr.io.found || ringDheapB0.io.found || ringDheapB1.io.found
-
   // gc signals
   gc.io.free_addr.ready := false.B
   when(gcBootDone) {
@@ -249,16 +231,15 @@ class Ouros(program: ProgramImage) extends Module {
   addrBox.io.addr_consumers.zip(reducr.io.free_addrs).foreach {
     case (box, rdc) => rdc :<>= box
   }
-  reducr.io.need_split        := dheap.io.out_big_drf.valid
-  gc.io.deallocate            :<>= bufferDealloc
-  gc.io.heap_read             :<= dheap.io.gc_heap_read
-  dheap.io.gc_heap_read_addr  :<= gc.io.heap_read_addr
-  gc.io.monitor.valid         := reducr.io.out_spine.valid
-  gc.io.monitor.bits          := reducr.io.out_spine.bits
-  gc.io.monitor_drf.valid     := dheap.io.out_big_drf.valid
-  gc.io.monitor_drf.bits      := dheap.io.out_big_drf.bits.app(0)
-  gc.io.monitor_drf_id        := dheap.io.out_main.bits.stack_idx
-
+  reducr.io.need_split       := dheap.io.out_big_drf.valid
+  gc.io.deallocate           :<>= bufferDealloc
+  gc.io.heap_read            :<= dheap.io.gc_heap_read
+  dheap.io.gc_heap_read_addr :<= gc.io.heap_read_addr
+  gc.io.monitor.valid        := reducr.io.out_spine.valid
+  gc.io.monitor.bits         := reducr.io.out_spine.bits
+  gc.io.monitor_drf.valid    := dheap.io.out_big_drf.valid
+  gc.io.monitor_drf.bits     := dheap.io.out_big_drf.bits.app(0)
+  gc.io.monitor_drf_id       := dheap.io.out_main.bits.stack_idx
   // The old top-level program injection ports are gone.  The submodules keep
   // their existing injection ports for local testing, but the FPGA core never
   // uses them because both memories are already initialized.
@@ -266,12 +247,10 @@ class Ouros(program: ProgramImage) extends Module {
   dheap.io.inject.bits  := 0.U.asTypeOf(Vec(maxAppLen, new Atom))
   dheap.io.inject_addr  := 0.U
   dheap.io.start        := launchPulse
-
   reducr.io.inject.valid := false.B
   reducr.io.inject.bits  := 0.U.asTypeOf(Vec(maxAppLen, new Atom))
   reducr.io.inject_addr  := 0.U
 }
-
 /**
  * Two-cycle FPGA power-on reset generator.
  *
@@ -287,7 +266,6 @@ class PowerOnReset
       }
     ) {
   override def desiredName = "OurosPowerOnReset"
-
   setInline(
     desiredName + ".sv",
     s"""module ${desiredName}(
@@ -303,17 +281,25 @@ class PowerOnReset
        |""".stripMargin
   )
 }
-
 /**
- * FPGA-facing top level. `start` may simply be tied high for an automatic
- * one-go boot. The final INT result remains stable once result_valid rises.
+ * FPGA-facing top level.
+ *
+ * `done` still means the Ouros computation has completed.  Independently, the
+ * latched 32-bit result is handed to UartDumpController and exposed as a
+ * ready/valid byte stream for the UART IP added in the next integration step.
  */
 class OurosFpga(program: ProgramImage) extends RawModule {
   val clock        = IO(Input(Clock()))
   val start        = IO(Input(Bool()))
   val done         = IO(Output(Bool()))
   val result_valid = IO(Output(Bool()))
-  val result       = IO(Output(UInt(atomSize.W)))
+  val result       = IO(Output(UInt(32.W)))
+
+  // Byte-stream side of the UART formatter.  These ports are intentionally
+  // flat so they are easy to connect to a UART/AXI shim in Vivado.
+  val uart_tx_valid = IO(Output(Bool()))
+  val uart_tx_data  = IO(Output(UInt(8.W)))
+  val uart_tx_ready = IO(Input(Bool()))
 
   val por = Module(new PowerOnReset)
   por.io.clock := clock
@@ -321,9 +307,19 @@ class OurosFpga(program: ProgramImage) extends RawModule {
   val core = withClockAndReset(clock, por.io.reset) {
     Module(new Ouros(program))
   }
+  val uartDump = withClockAndReset(clock, por.io.reset) {
+    Module(new UartDumpController)
+  }
 
   core.io.start := start
   done          := core.io.done
   result_valid  := core.io.result_valid
   result        := core.io.result
+
+  uartDump.io.result.valid := core.io.result_valid
+  uartDump.io.result.bits  := core.io.result
+
+  uart_tx_valid       := uartDump.io.tx.valid
+  uart_tx_data        := uartDump.io.tx.bits
+  uartDump.io.tx.ready := uart_tx_ready
 }

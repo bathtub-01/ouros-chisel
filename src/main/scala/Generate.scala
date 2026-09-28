@@ -4,7 +4,6 @@ import java.nio.file.{Path, Paths}
 
 import benchmarks._
 import ouros._
-
 /**
  * FPGA artifact generator.
  *
@@ -25,7 +24,6 @@ object Generate {
     "sumeuler"  -> SumEuler,
     "while"     -> Whilex,
   )
-
   private def usage(): Nothing = {
     val names = benchmarks.keys.toSeq.sorted.mkString(", ")
     System.err.println(
@@ -38,7 +36,6 @@ object Generate {
 
   def main(args: Array[String]): Unit = {
     if (args.length < 1 || args.length > 2) usage()
-
     val name = args(0).toLowerCase
     val benchmark =
       benchmarks.getOrElse(
@@ -53,7 +50,6 @@ object Generate {
       else Paths.get("fpga-gen", name)
 
     val program = ProgramImageWriter.write(benchmark, outDir)
-
     ChiselStage.emitSystemVerilogFile(
       new OurosFpga(program),
       Array("--target-dir", outDir.toString),
@@ -62,7 +58,6 @@ object Generate {
         "-strip-debug-info",
       ),
     )
-
     println()
     println(s"Generated Ouros FPGA artifacts for '$name':")
     println(s"  directory : ${outDir.toAbsolutePath.normalize}")
@@ -72,6 +67,8 @@ object Generate {
     println(s"  heap cells: ${program.heapWords}")
     println()
     println("Add every generated *.sv plus heap.mem and comb.mem to Vivado.")
-    println("The FPGA-facing top has clock, start, done, result_valid, and result; there is no reset pin.")
+    println(
+      "The FPGA-facing top has clock, start, done, result_valid, result, uart_tx_valid, uart_tx_data, and uart_tx_ready; there is no reset pin."
+    )
   }
 }
