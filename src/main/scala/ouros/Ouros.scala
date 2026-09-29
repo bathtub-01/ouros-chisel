@@ -5,6 +5,7 @@ import chisel3.util._
 import chisel3.experimental.BundleLiterals._
 import chisel3.experimental.VecLiterals._
 import _root_.circt.stage.ChiselStage
+import axilib._
 
 import common._
 import common.SystemConfig._
@@ -284,22 +285,26 @@ class PowerOnReset
 /**
  * FPGA-facing top level.
  *
- * `done` still means the Ouros computation has completed.  Independently, the
- * latched 32-bit result is handed to UartDumpController and exposed as a
- * ready/valid byte stream for the UART IP added in the next integration step.
+ * `done` means the Ouros computation has completed.  The final 32-bit result
+ * is formatted by UartDumpController and written to an external AXI UART Lite
+ * peripheral through a tiny single-outstanding-transaction AXI4-Lite master.
+ *
+ * The AXI UART Lite peripheral is expected at address 0 by default.  Because
+ * the Chisel top is normally connected point-to-point to that IP in Vivado,
+ * only the UART register offsets are required.  A different base can be fixed
+ * at elaboration time through uartBaseAddr.
  */
-class OurosFpga(program: ProgramImage) extends RawModule {
-  val clock        = IO(Input(Clock()))
-  val start        = IO(Input(Bool()))
-  val done         = IO(Output(Bool()))
-  val result_valid = IO(Output(Bool()))
-  val result       = IO(Output(UInt(32.W)))
+class OurosFpga(program: ProgramImage, uartBaseAddr: BigInt = 0) extends RawModule {
+  private val axiParams = Axi4LiteParams(addrWidth = 32, dataWidth = 32)
 
-  // Byte-stream side of the UART formatter.  These ports are intentionally
-  // flat so they are easy to connect to a UART/AXI shim in Vivado.
-  val uart_tx_valid = IO(Output(Bool()))
-  val uart_tx_data  = IO(Output(UInt(8.W)))
-  val uart_tx_ready = IO(Input(Bool()))
+  val clock = IO(Input(Clock()))
+  val start = IO(Input(Bool()))
+  val done  = IO(Output(Bool()))
+
+  // AXI4-Lite master exported as one aggregate interface.  With normal Chisel
+  // aggregate lowering this becomes Vivado-friendly M_AXI_AWADDR,
+  // M_AXI_WDATA, ... ports.
+  val M_AXI = IO(Axi4LiteMaster(axiParams))
 
   val por = Module(new PowerOnReset)
   por.io.clock := clock
@@ -310,16 +315,40 @@ class OurosFpga(program: ProgramImage) extends RawModule {
   val uartDump = withClockAndReset(clock, por.io.reset) {
     Module(new UartDumpController)
   }
+  val uartAxi = withClockAndReset(clock, por.io.reset) {
+    Module(new UartLiteAxiController(uartBaseAddr))
+  }
 
   core.io.start := start
   done          := core.io.done
-  result_valid  := core.io.result_valid
-  result        := core.io.result
 
   uartDump.io.result.valid := core.io.result_valid
   uartDump.io.result.bits  := core.io.result
+  uartAxi.io.tx             :<>= uartDump.io.tx
 
-  uart_tx_valid       := uartDump.io.tx.valid
-  uart_tx_data        := uartDump.io.tx.bits
-  uartDump.io.tx.ready := uart_tx_ready
+  // Forward the controller's master interface to the FPGA boundary.  The
+  // directions are written explicitly because both bundles are master-oriented.
+  M_AXI.AWADDR  := uartAxi.io.axi.AWADDR
+  M_AXI.AWPROT  := uartAxi.io.axi.AWPROT
+  M_AXI.AWVALID := uartAxi.io.axi.AWVALID
+  uartAxi.io.axi.AWREADY := M_AXI.AWREADY
+
+  M_AXI.WDATA  := uartAxi.io.axi.WDATA
+  M_AXI.WSTRB  := uartAxi.io.axi.WSTRB
+  M_AXI.WVALID := uartAxi.io.axi.WVALID
+  uartAxi.io.axi.WREADY := M_AXI.WREADY
+
+  uartAxi.io.axi.BRESP  := M_AXI.BRESP
+  uartAxi.io.axi.BVALID := M_AXI.BVALID
+  M_AXI.BREADY          := uartAxi.io.axi.BREADY
+
+  M_AXI.ARADDR  := uartAxi.io.axi.ARADDR
+  M_AXI.ARPROT  := uartAxi.io.axi.ARPROT
+  M_AXI.ARVALID := uartAxi.io.axi.ARVALID
+  uartAxi.io.axi.ARREADY := M_AXI.ARREADY
+
+  uartAxi.io.axi.RDATA  := M_AXI.RDATA
+  uartAxi.io.axi.RRESP  := M_AXI.RRESP
+  uartAxi.io.axi.RVALID := M_AXI.RVALID
+  M_AXI.RREADY          := uartAxi.io.axi.RREADY
 }

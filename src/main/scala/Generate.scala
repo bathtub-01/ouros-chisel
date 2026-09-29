@@ -68,7 +68,7 @@ object Generate {
     println()
     println("Add every generated *.sv plus heap.mem and comb.mem to Vivado.")
     println(
-      "The FPGA-facing top has clock, start, done, result_valid, result, uart_tx_valid, uart_tx_data, and uart_tx_ready; there is no reset pin."
+      "The FPGA-facing top has clock, start, done, and a 32-bit AXI4-Lite master interface; there is no reset pin."
     )
   }
 }
