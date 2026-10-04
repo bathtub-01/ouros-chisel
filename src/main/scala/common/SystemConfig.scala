@@ -5,6 +5,8 @@ import chisel3.util._
 
 object SystemConfig {
 
+  val atomPayloadSize = 32 // atomSize - AtomType.getWidth
+
   /** size of an Atom */
   val atomSize = atomPayloadSize + AtomType.getWidth
 
@@ -43,8 +45,6 @@ object SystemConfig {
 
   /** whether the ALU block is pipelined */
   val AluPipe: Boolean = false
-
-  val atomPayloadSize = AtomType.getWidth // atomSize - AtomType.getWidth
 
   /**
    * When the free cells are lesser than (GCAt * heapSize), a GC round is
