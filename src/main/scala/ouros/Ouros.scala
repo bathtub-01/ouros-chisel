@@ -286,15 +286,13 @@ class PowerOnReset
  * FPGA-facing top level.
  *
  * `done` means the Ouros computation has completed.  The final 32-bit result
- * is formatted by UartDumpController and written to an external AXI UART Lite
- * peripheral through a tiny single-outstanding-transaction AXI4-Lite master.
- *
- * The AXI UART Lite peripheral is expected at address 0 by default.  Because
- * the Chisel top is normally connected point-to-point to that IP in Vivado,
- * only the UART register offsets are required.  A different base can be fixed
- * at elaboration time through uartBaseAddr.
+ * is formatted by UartDumpController and written to the Zynq UltraScale+ PS UART1 through S_AXI_LPD.
+ * The PS still needs FSBL/psu_init to enable UART1 MIO, clocks and resets;
+ * the AXI controller configures UART framing/baud/TX enable when the
+ * first result byte arrives (after Ouros has finished).
+ * Default UART1 reference clock: 100 MHz; default output: 115200 8N1.
  */
-class OurosFpga(program: ProgramImage, uartBaseAddr: BigInt = 0) extends RawModule {
+class OurosFpga(program: ProgramImage, uartBaseAddr: BigInt = BigInt("ff010000", 16)) extends RawModule {
   private val axiParams = Axi4LiteParams(addrWidth = 32, dataWidth = 32)
 
   val clock = IO(Input(Clock()))
@@ -316,7 +314,7 @@ class OurosFpga(program: ProgramImage, uartBaseAddr: BigInt = 0) extends RawModu
     Module(new UartDumpController)
   }
   val uartAxi = withClockAndReset(clock, por.io.reset) {
-    Module(new UartLiteAxiController(uartBaseAddr))
+    Module(new PsUartAxiController(uartBaseAddr))
   }
 
   core.io.start := start
