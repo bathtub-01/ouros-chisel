@@ -2,54 +2,48 @@
 
 Chisel HDL implementation of **Ouros**, a pipelined graph-reduction processor for Haskell.
 
-This implementation is intended to be a faithful, direct RTL translation of the [Ouros simulator](https://github.com/bathtub-01/ouros-simulator). The simulator is treated as the cycle-level reference model: the Chisel design follows the same component structure, routing behaviour, pipeline timing, thread-management logic, and garbage-collection mechanisms as closely as practical. The goal is to keep the hardware implementation and simulator behaviour directly comparable rather than maintain two independent models of the architecture.
+This repository aims to remain a faithful hardware translation of the
+[Ouros simulator](https://github.com/bathtub-01/ouros-simulator). Its
+real-world branch includes an `IO` Atom, ordinary DHeap suspension/strictness,
+and a dedicated AXI4-Lite I/O reduction unit. The UART-only I/O controller is
+an **independent FPGA artifact** rather than part of the Ouros processor.
 
 ## Requirements
 
 - JDK 11 or newer
-- [sbt](https://www.scala-sbt.org/)
-- [Verilator](https://verilator.org/) for simulation
+- sbt, Scala 2.13, Chisel 7, and Verilator (for simulation)
+- [axi-lib](https://github.com/bathtub-01/axi-lib) published locally as
+  `local.axilib %% axi-lib % 0.1.0-SNAPSHOT`
 
-The project currently uses Scala 2.13 and Chisel 7.
-
-## Quick start
-
-Clone the repository:
+## Generate FPGA artifacts
 
 ```sh
-git clone https://github.com/bathtub-01/ouros-chisel.git
-cd ouros-chisel
+sbt "runMain Generate uart"
 ```
 
-Run the bundled Ouros benchmark suite:
+This emits two independent SystemVerilog tops, `OurosFpga` and
+`UartIoControllerFpga`, and initialized program memories for the UART-echo
+benchmark. `OurosFpga` exposes `clock`, `start`, `done` and a 32-bit
+`M_AXI`; `UartIoControllerFpga` exposes its own `clock`/`reset`, `S_AXI`
+(from Ouros), and `M_AXI` (to PS UART1).
+
+See **[FPGA_USAGE.md](FPGA_USAGE.md)** for wiring, register map, UART baud
+setup, reset conventions, limitations and artifact-generation instructions.
+
+## Pure benchmark simulation
 
 ```sh
-make run Main
+sbt "runMain Run fib"
+sbt "testOnly ouros.IoUnitSpec"
+sbt "testOnly ouros.UartIoControllerSpec"
 ```
 
-The test driver loads the bundled heap and combinator images, runs each benchmark on the Chisel implementation, and reports the consumed cycle count. These results are useful for checking the implementation against the cycle-accurate simulator.
-
-## Generate SystemVerilog
-
-Generate the Ouros RTL with:
-
-```sh
-make run ouros.Ouros
-```
-
-The generated SystemVerilog is written to:
-
-```text
-sv-gen/
-```
-
-To remove generated RTL:
-
-```sh
-make clean-sv
-```
+`Run` uses initialized FPGA-style memories. It does not model an external
+AXI bus; the UART benchmark is intended for the UART-controller path or a
+future integrated PS-UART testbench. Pure benchmarks are unaffected by the
+new I/O port.
 
 ## Related repositories
 
-- Ouros simulator: https://github.com/bathtub-01/ouros-simulator
-- Ouros MicroHs compiler fork: https://github.com/bathtub-01/MicroHs
+- [Ouros simulator](https://github.com/bathtub-01/ouros-simulator)
+- [Ouros MicroHs compiler fork](https://github.com/bathtub-01/MicroHs)

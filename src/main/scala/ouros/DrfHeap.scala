@@ -33,6 +33,8 @@ object StmSub extends ChiselEnum {
  */
 object CONSUMEs extends ChiselEnum {
   val NoInput                  = Value
+  val InputIOReady             = Value
+  val InputForwardReducer      = Value
   val InputIA                  = Value
   val InputWHNFWithDmder       = Value
   val InputWHNFNoDmderNewFrame = Value
@@ -105,6 +107,7 @@ class DrfHeap extends Module {
     val in_sub      = Flipped(Decoupled(new FrozenApp))
     val out_main    = Decoupled(new ActiveApp)
     val out_sub     = Decoupled(new ActiveApp)
+    val out_io      = Decoupled(new ActiveApp)
     val out_big_drf = Decoupled(new FrozenApp)
     val search      = Output(Addr)
     val found       = Input(Bool())
@@ -119,12 +122,8 @@ class DrfHeap extends Module {
     val inject_addr = Input(Addr)
     val start        = Input(Bool())
     val done         = Output(Bool())
-    val result_valid = Output(Bool())
-    val result_atom  = Output(new Atom)
   })
   val busy         = RegInit(false.B)
-  val resultValid  = RegInit(false.B)
-  val resultAtom   = RegInit(0.U.asTypeOf(new Atom))
   val stmMain      = RegInit(Stm.IDLE)
   val stmSub       = RegInit(StmSub.IDLE)
   val regInMain    = RegInit(0.U.asTypeOf(new ActiveApp))
@@ -199,6 +198,10 @@ class DrfHeap extends Module {
         pos := 2.U
         ptr := app(2).toPtr().pointer
       }
+    }.elsewhen(app(0).isIO()) {
+      val (_, ioPos, ioPtr) = ioNextPtr(app, 1.U)
+      pos := ioPos
+      ptr := ioPtr
     }.elsewhen(app(0).isSeq()) {
       // Canonical seq only demands its first argument.  Once that argument
       // reaches WHNF, deref() drops it and exposes the second argument.
@@ -210,8 +213,11 @@ class DrfHeap extends Module {
     }
     (pos, ptr)
   }
-  def selectNextArg(app: Vec[Atom]): (UInt, UInt) =
-    (2.U, app(2).toPtr().pointer)
+  def selectNextArg(app: Vec[Atom]): (UInt, UInt) = {
+    val (_, ioPos, ioPtr) = ioNextPtr(app, regArgId + 1.U)
+    (Mux(app(0).isIO(), ioPos, 2.U),
+      Mux(app(0).isIO(), ioPtr, app(2).toPtr().pointer))
+  }
 
   def findDmdStk(): UInt =
     threadStacks.indexWhere(s =>
@@ -306,7 +312,12 @@ class DrfHeap extends Module {
     when(!io.in_main.fire) {
       wire := CONSUMEs.NoInput
     }.otherwise {
-      when(isWHNF(io.in_main.bits.app)) {
+      when(ioReady(io.in_main.bits.app)) {
+        wire := CONSUMEs.InputIOReady
+      }.elsewhen((io.in_main.bits.app(0).isCom() || io.in_main.bits.app(0).isY()) &&
+          !isWHNF(io.in_main.bits.app)) {
+        wire := CONSUMEs.InputForwardReducer
+      }.elsewhen(isWHNF(io.in_main.bits.app)) {
         when(threadStacks.exists(findMoreDmder(incomingStk.top.addr, _))) {
           wire := CONSUMEs.InputWHNFWithDmder
         }.otherwise {
@@ -379,18 +390,25 @@ class DrfHeap extends Module {
     val local_stk: Bool =
       genIAs1 === IAs1.ExistWHNF || genIAs1 === IAs1.ExistIAWorkingNewFrame
     val more_strict_args: Bool =
-      regInMain.app(0).isPrm() && regArgId === 1.U && regInMain.app(2).isPtr()
+      (regInMain.app(0).isPrm() && regArgId === 1.U && regInMain.app(2).isPtr()) ||
+      (regInMain.app(0).isIO() && ioNextPtr(regInMain.app, regArgId + 1.U)._1)
     val wire = Wire(IAs2())
-    when(more_strict_args && local_stk) {
+    // IO strict arguments are forced sequentially: never spawn a second
+    // strict-argument thread while the first is still running.
+    when(regInMain.app(0).isIO() && more_strict_args &&
+        genIAs1 =/= IAs1.ExistWHNF) {
+      wire := IAs2.NoMoreArgsNoEmit
+    }.elsewhen(more_strict_args && local_stk) {
       wire := IAs2.NextStrictArgLocal
-    }.elsewhen(more_strict_args && idle_stk) {
+    }.elsewhen(more_strict_args && idle_stk && !regInMain.app(0).isIO()) {
       wire := IAs2.NextStrictArgNewStk
     }.otherwise {
       when(
         (regInMain.app(0).isPtr() ||
           (regInMain.app(0).isPrm() &&
             (regInMain.app(1).isInt() || regInMain.app(2).isInt())) ||
-          regInMain.app(0).isSeq()) &&
+          regInMain.app(0).isSeq() ||
+          regInMain.app(0).isIO()) &&
           target_in_whnf
       ) {
         wire := IAs2.NoMoreArgsCanEmit
@@ -419,6 +437,10 @@ class DrfHeap extends Module {
         when(mainHeap.readOutA.app(1).isPtr()) {
           wire := mainHeap.readOutA.app(1).isUnique()
         }
+      }
+      is(AtomType.IO) {
+        val (_, pos, _) = ioNextPtr(mainHeap.readOutA.app, 1.U)
+        wire := mainHeap.readOutA.app(pos).isUnique()
       }
     }
     wire
@@ -452,10 +474,24 @@ class DrfHeap extends Module {
   }
   // consume the next input
   def nextMain(): Unit = {
-    io.in_main.ready := io.free_addr.valid
+    io.in_main.ready := io.free_addr.valid &&
+      (!io.in_main.valid ||
+        (!ioReady(io.in_main.bits.app) || io.out_io.ready))
     regInMain        := io.in_main.bits
+    // Provide real decoupled valid independently of ready/backpressure.
+    io.out_io.valid := io.in_main.valid && io.free_addr.valid && ioReady(io.in_main.bits.app)
+    io.out_io.bits  := io.in_main.bits
     switch(genCONSUMEs) {
       is(CONSUMEs.NoInput) {
+        stmMain := Stm.IDLE
+      }
+      is(CONSUMEs.InputIOReady) {
+        // The thread stays live, but its App is now owned by the I/O unit.
+        // It must be accepted once and never replayed for a second effect.
+        stmMain := Stm.IDLE
+      }
+      is(CONSUMEs.InputForwardReducer) {
+        putOutputMain(io.in_main.bits.stack_idx, io.in_main.bits.app)
         stmMain := Stm.IDLE
       }
       is(CONSUMEs.InputIA) {
@@ -487,6 +523,10 @@ class DrfHeap extends Module {
     val dmder  = mainHeap.readOutA.app
     val target = regInMain.app
 
+    when(dmder(0).isIO()) {
+      assert(regTgtLen === 1.U && target(0).isInt(),
+        "strict IO operand must resolve to a singleton INT")
+    }
     val (dres1, dres2, is_big) =
       deref(dmder, select1stArg(dmder)._1, target, regTgtLen, regFreeAddr.bits)
 
@@ -530,6 +570,10 @@ class DrfHeap extends Module {
     val dmder                  = regInMain.app
     val updated_dmder          = WireInit(dmder)
     val target                 = mainHeap.readOutA
+    when(dmder(0).isIO() && genIAs1 === IAs1.ExistWHNF) {
+      assert(target.appLen === 1.U && target.app(0).isInt(),
+        "strict IO operand must resolve to a singleton INT")
+    }
     val (dres1, dres2, is_big) =
       deref(dmder, regArgId, target.app, target.appLen, regFreeAddr.bits)
     switch(genIAs1) {
@@ -623,6 +667,8 @@ class DrfHeap extends Module {
   io.out_main.valid     := false.B
   io.out_main.bits      := DontCare
   io.out_sub.valid      := false.B
+  io.out_io.valid       := false.B
+  io.out_io.bits        := DontCare
   io.out_sub.bits       := DontCare
   io.out_big_drf.valid  := needSplit
   io.out_big_drf.bits   := DontCare
@@ -635,8 +681,6 @@ class DrfHeap extends Module {
   regGCGranted          := false.B
   io.gc_heap_read.valid := regGCGranted
   io.gc_heap_read.bits  := mainHeap.readOutB.app
-  io.result_valid       := resultValid
-  io.result_atom        := resultAtom
   // program injection & start/end control
   when(!busy && io.inject.valid) {
     mainHeap.writeB(
@@ -649,8 +693,6 @@ class DrfHeap extends Module {
 
   when(io.start && !busy) {
     busy        := true.B
-    resultValid := false.B
-    resultAtom  := 0.U.asTypeOf(new Atom)
     frameStacks(0).push(0.U.asTypeOf(Vec(maxThreads, Addr)))
     putOutputMain(0.U, appBuilder(8, ptrBuilder(0, false)))
   }
@@ -660,9 +702,7 @@ class DrfHeap extends Module {
         io.in_main.bits.stack_idx === 0.U &&
         isWHNF(io.in_main.bits.app)
     ) {
-      resultAtom  := io.in_main.bits.app(0)
-      resultValid := true.B
-      busy        := false.B
+      busy := false.B
     }
   }
   // NOTE assume the output of DrfHeap is never blocked.

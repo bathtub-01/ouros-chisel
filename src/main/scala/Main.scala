@@ -53,6 +53,7 @@ object Run extends App with ChiselSim {
     "queens2"   -> Queens2,
     "sumeuler"  -> SumEuler,
     "while"     -> Whilex,
+    // UART has no external PS model in Run; generate it via `Generate uart`.
   )
 
   private val TimeoutCycles = 5_000_000L

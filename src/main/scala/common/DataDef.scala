@@ -27,6 +27,7 @@ object AtomType extends ChiselEnum {
   val ARG = Value
   val ERR = Value
   val SEQ = Value
+  val IO  = Value // payload bit 0: 0=read, 1=write
 }
 
 abstract class AtomPayload extends Bundle
@@ -96,6 +97,8 @@ class Atom extends Bundle {
   def isPrm(): Bool       = this.atomType === AtomType.PRM
   def isArg(): Bool       = this.atomType === AtomType.ARG
   def isSeq(): Bool       = this.atomType === AtomType.SEQ
+  def isIO(): Bool        = this.atomType === AtomType.IO
+  def ioWrite(): Bool     = this.payload(0)
 
   /** whether this is a unique PTR */
   def isUnique(): Bool = this.isPtr() && this.toPtr().unique

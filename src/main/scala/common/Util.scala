@@ -89,7 +89,7 @@ object Helper {
       // Copy app verbatim (static), then overwrite one slot
       for (i <- 0 until res.length) {
         if (i < app.length) {
-          if (i == 1 || i == 2)
+          if (i == 1 || i == 2 || i == 3)
             res(i) := Mux(arg_id === i.U, target(0), app(i))
           else
             res(i) := app(i)
@@ -206,6 +206,9 @@ object Helper {
       }
       is(AtomType.SEQ) {
         res := 2.U
+      }
+      is(AtomType.IO) {
+        res := Mux(atm.ioWrite(), 3.U, 2.U)
       }
     }
     res
@@ -412,6 +415,37 @@ object Helper {
       _.atomType -> AtomType.Y,
       _.payload  -> 0.U
     )
+
+  /** Literal IO primitive builder. The payload low bit selects write. */
+  def ioBuilder(isWrite: Boolean): Atom =
+    (new Atom).Lit(
+      _.atomType -> AtomType.IO,
+      _.payload -> (if (isWrite) 1.U else 0.U)
+    )
+
+  /** Saturated IO operands are strictly evaluated from left to right. */
+  def ioSaturated(app: Vec[Atom]): Bool =
+    app(0).isIO() && appLen(app) > Mux(app(0).ioWrite(), 3.U, 2.U)
+
+  def ioReady(app: Vec[Atom]): Bool =
+    ioSaturated(app) && app(1).isInt() && app(2).isInt() &&
+      (!app(0).ioWrite() || app(3).isInt())
+
+  /** First remaining strict IO pointer at or after start (positions 1..3). */
+  def ioNextPtr(app: Vec[Atom], start: UInt): (Bool, UInt, UInt) = {
+    val found = WireInit(false.B)
+    val pos = WireInit(0.U(2.W))
+    val ptr = WireInit(0.U.asTypeOf(Addr))
+    for (i <- 3 to 1 by -1) {
+      when(ioSaturated(app) && i.U >= start &&
+          (if (i == 3) app(0).ioWrite() else true.B) && app(i).isPtr()) {
+        found := true.B
+        pos := i.U
+        ptr := app(i).getPtr()
+      }
+    }
+    (found, pos, ptr)
+  }
 
   /** Literal SEQ builder */
   def seqBuilder(): Atom =

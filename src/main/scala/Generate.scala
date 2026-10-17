@@ -23,6 +23,7 @@ object Generate {
     "queens2"   -> Queens2,
     "sumeuler"  -> SumEuler,
     "while"     -> Whilex,
+    "uart"      -> Uart,
   )
   private def usage(): Nothing = {
     val names = benchmarks.keys.toSeq.sorted.mkString(", ")
@@ -58,17 +59,24 @@ object Generate {
         "-strip-debug-info",
       ),
     )
+    // Generate the independent controller into the same directory. Its module
+    // remains a separate top and can be packaged as a standalone Vivado IP.
+    ChiselStage.emitSystemVerilogFile(
+      new UartIoControllerFpga(),
+      Array("--target-dir", outDir.toString),
+      firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info"),
+    )
     println()
     println(s"Generated Ouros FPGA artifacts for '$name':")
     println(s"  directory : ${outDir.toAbsolutePath.normalize}")
-    println(s"  top       : OurosFpga")
+    println(s"  core top  : OurosFpga")
+    println(s"  UART top  : UartIoControllerFpga")
     println(s"  heap image: ${outDir.resolve("heap.mem")}")
     println(s"  comb image: ${outDir.resolve("comb.mem")}")
     println(s"  heap cells: ${program.heapWords}")
     println()
     println("Add every generated *.sv plus heap.mem and comb.mem to Vivado.")
-    println(
-      "The FPGA-facing top has clock, start, done, and a 32-bit AXI4-Lite master interface; there is no reset pin."
-    )
+    println("Connect OurosFpga.M_AXI to UartIoControllerFpga.S_AXI in BD.")
+    println("Connect controller M_AXI through SmartConnect to PS S_AXI_LPD (UART1).")
   }
 }

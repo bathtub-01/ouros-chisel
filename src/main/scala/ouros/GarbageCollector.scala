@@ -41,6 +41,7 @@ class GarbageCollector extends Module {
     val heap_read_addr = Valid(Addr)
     val heap_read      = Flipped(Valid(AppV))
     val monitor        = Flipped(Valid(new ActiveApp))
+    val monitor_io     = Flipped(Valid(new ActiveApp))
     val monitor_drf    = Flipped(Valid(new Atom))
     val monitor_drf_id = Input(UInt(log2Ceil(maxThreads).W))
     // ============ non-essential ports ===================
@@ -331,6 +332,10 @@ class GarbageCollector extends Module {
     when(io.monitor.valid) {
       regMonitors(io.monitor.bits.stack_idx).valid := true.B
       regMonitors(io.monitor.bits.stack_idx).bits  := io.monitor.bits.app
+    }
+    when(io.monitor_io.valid) {
+      regMonitors(io.monitor_io.bits.stack_idx).valid := true.B
+      regMonitors(io.monitor_io.bits.stack_idx).bits  := io.monitor_io.bits.app
     }
   }
 

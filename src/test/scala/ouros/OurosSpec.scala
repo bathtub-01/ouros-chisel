@@ -1,84 +1,41 @@
-package ouros
+import ouros._
 
 import chisel3._
 import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.freespec.AnyFreeSpec
-import chisel3.experimental.BundleLiterals._
+import java.nio.file.Paths
+import benchmarks.Fib
 
-import benchmarks._
-import ouros._
-
+/** Tests the FPGA-style memory boot and pure execution with the new bus idle. */
 class OurosSpec extends AnyFreeSpec with ChiselSim {
-  def runBenchmark(benchmark: Benchmark, dut: Ouros): Int = {
-    var cycles: Int = -2 // allign with the simulator
-    dut.clock.step(3)
-    // ====== program injection =======
-    dut.io.inject.valid.poke(true.B)
-    dut.io.inject_to.poke(InjectTo.Heap)
-    for ((app, i) <- benchmark.heap_img.zipWithIndex) {
-      dut.io.inject.bits.zip(app).foreach { case (p, a) => p.poke(a) }
-      dut.io.inject_addr.poke(i)
-      dut.clock.step()
-    }
-    dut.io.inject_to.poke(InjectTo.Comb)
-    for ((app, i) <- benchmark.comb_img.zipWithIndex) {
-      dut.io.inject.bits.zip(app).foreach { case (p, a) => p.poke(a) }
-      dut.io.inject_addr.poke(i)
-      dut.clock.step()
-    }
-    dut.io.inject.valid.poke(false.B)
-    // =========== startup ============
-    dut.io.start.poke(true.B)
-    dut.clock.step()
-    dut.io.start.poke(false.B)
-    // ============ run ===============
-    while (!dut.io.done.peekBoolean() && cycles <= 5_000_00) {
-      dut.clock.step()
-      cycles = cycles + 1
-    }
-    println(s"${benchmark.toString()}: ${cycles} cycles")
-    cycles
-  }
-
-  def inspect(p: Benchmark) = "Playground" in {
-    simulate(new Ouros) { dut => runBenchmark(p, dut) }
-  }
-
-  def runBench(bs: List[Benchmark]) = bs
-    .map { b =>
-      var cycles: Int = 0
-      simulate(new Ouros) { dut => cycles = runBenchmark(b, dut) }
-      (b.toString, cycles)
-    }
-    .foreach { case (name, cycles) => println(s"${name}: ${cycles} consumed") }
-
-  // def quickBenchmarks() = "Quick Benchmarks" in {
-  //   runBench(List(BoolAnd, BoolNest, AluOp, MapY))
-  // }
-
-  def fullBenchmarks() = "Benchmarks" in {
-    runBench(
-      List(
-        Adjoxo,
-        Braun,
-        Clausify,
-        Countdown,
-        Fib,
-        Mss,
-        Ordlist,
-        Permsort,
-        Queens,
-        Queens2,
-        Sumpuz,
-        Taut,
-        Whilex,
-        SumEuler,
-        TreeSum
-      )
+  "fib still completes without I/O" in {
+    val dir = Paths.get("simu-out", "test-fib").toAbsolutePath.normalize
+    val metadata = ProgramImageWriter.write(Fib, dir)
+    val image = metadata.copy(
+      heapFile = dir.resolve("heap.mem").toString,
+      combFile = dir.resolve("comb.mem").toString,
     )
+    simulate(new Ouros(image), firtoolOpts = Array("-disable-all-randomization")) { dut =>
+      // AXI responses are unused for pure workloads.
+      dut.io.M_AXI.AWREADY.poke(false.B)
+      dut.io.M_AXI.WREADY.poke(false.B)
+      dut.io.M_AXI.BVALID.poke(false.B)
+      dut.io.M_AXI.BRESP.poke(0.U)
+      dut.io.M_AXI.ARREADY.poke(false.B)
+      dut.io.M_AXI.RDATA.poke(0.U)
+      dut.io.M_AXI.RRESP.poke(0.U)
+      dut.io.M_AXI.RVALID.poke(false.B)
+      dut.io.start.poke(false.B)
+      dut.clock.step(3)
+      dut.io.start.poke(true.B)
+      dut.clock.step()
+      dut.io.start.poke(false.B)
+      var cycles = 0
+      while (!dut.io.done.peekBoolean() && cycles < 200000) {
+        dut.clock.step()
+        cycles += 1
+      }
+      assert(dut.io.done.peekBoolean(), s"fib did not finish after $cycles cycles")
+    }
   }
-
-  inspect(Fib)
-  // quickBenchmarks()
-  // fullBenchmarks()
 }

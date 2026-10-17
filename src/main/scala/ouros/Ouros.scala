@@ -25,16 +25,12 @@ import Dest._
  * second start is intentionally ignored: this is a one-go core.
  */
 class Ouros(program: ProgramImage) extends Module {
-  require(
-    atomPayloadSize == 32,
-    s"The FPGA result/UART path currently requires a 32-bit Atom payload, got $atomPayloadSize bits",
-  )
+  require(atomPayloadSize == 32, "AXI4-Lite requires 32-bit atom payloads")
 
   val io = IO(new Bundle {
     val start        = Input(Bool())
     val done         = Output(Bool())
-    val result_valid = Output(Bool())
-    val result       = Output(UInt(32.W))
+    val M_AXI        = Axi4LiteMaster(Axi4LiteParams(32, 32))
   })
   def getDest(app: Vec[Atom]): Dest.Type = {
     val wire = Wire(Dest())
@@ -64,6 +60,26 @@ class Ouros(program: ProgramImage) extends Module {
   val reducr = programModules._2
 
   val alu     = Module(new Alu(pipelined = AluPipe))
+  val ioUnit  = Module(new IoUnit)
+  io.M_AXI.AWADDR := ioUnit.io.axi.AWADDR
+  io.M_AXI.AWPROT := ioUnit.io.axi.AWPROT
+  io.M_AXI.AWVALID := ioUnit.io.axi.AWVALID
+  ioUnit.io.axi.AWREADY := io.M_AXI.AWREADY
+  io.M_AXI.WDATA := ioUnit.io.axi.WDATA
+  io.M_AXI.WSTRB := ioUnit.io.axi.WSTRB
+  io.M_AXI.WVALID := ioUnit.io.axi.WVALID
+  ioUnit.io.axi.WREADY := io.M_AXI.WREADY
+  ioUnit.io.axi.BRESP := io.M_AXI.BRESP
+  ioUnit.io.axi.BVALID := io.M_AXI.BVALID
+  io.M_AXI.BREADY := ioUnit.io.axi.BREADY
+  io.M_AXI.ARADDR := ioUnit.io.axi.ARADDR
+  io.M_AXI.ARPROT := ioUnit.io.axi.ARPROT
+  io.M_AXI.ARVALID := ioUnit.io.axi.ARVALID
+  ioUnit.io.axi.ARREADY := io.M_AXI.ARREADY
+  ioUnit.io.axi.RDATA := io.M_AXI.RDATA
+  ioUnit.io.axi.RRESP := io.M_AXI.RRESP
+  ioUnit.io.axi.RVALID := io.M_AXI.RVALID
+  io.M_AXI.RREADY := ioUnit.io.axi.RREADY
   val gc      = Module(new GarbageCollector)
   val addrBox = Module(new AddrBox)
   // ============ power-up / one-go control =============
@@ -104,8 +120,7 @@ class Ouros(program: ProgramImage) extends Module {
     doneReg := true.B
   }
   io.done         := doneReg
-  io.result_valid := dheap.io.result_valid
-  io.result       := dheap.io.result_atom.payload
+
 
   val wireFreeAddr = {
     val wire = Wire(DecoupledIO(Addr))
@@ -118,6 +133,7 @@ class Ouros(program: ProgramImage) extends Module {
   val wireToDheapA1 = wireGen
   val wireToDheapA2 = wireGen
   val wireToDheapA3 = wireGen
+  val wireToDheapA4 = wireGen
 
   val wireToReducr0 = wireGen
   val wireToReducr1 = wireGen
@@ -141,14 +157,16 @@ class Ouros(program: ProgramImage) extends Module {
   }
   dheap.io.out_sub.ready := true.B
   when(dheap.io.out_sub.valid) {
-    switch(getDest(dheap.io.out_sub.bits.app)) {
+    switch(Mux(dheap.io.out_sub.bits.app(0).isIO(), ToDheap,
+      getDest(dheap.io.out_sub.bits.app))) {
       is(ToDheap) { wireToDheapA3 :<>= dheap.io.out_sub }
       is(ToAlu) { wireToAlu2 :<>= dheap.io.out_sub }
       is(ToReducr) { wireToReducr3 :<>= dheap.io.out_sub }
     }
   }
   when(reducr.io.out_spine.valid) {
-    switch(getDest(reducr.io.out_spine.bits.app)) {
+    switch(Mux(reducr.io.out_spine.bits.app(0).isIO(), ToDheap,
+      getDest(reducr.io.out_spine.bits.app))) {
       is(ToDheap) { wireToDheapA1 :<>= reducr.io.out_spine }
       is(ToAlu) { wireToAlu0 :<>= reducr.io.out_spine }
       is(ToReducr) { wireToReducr0 :<>= reducr.io.out_spine }
@@ -166,7 +184,9 @@ class Ouros(program: ProgramImage) extends Module {
   val bufferDheapA1 = Queue(wireToDheapA1, bufferSize) // from reducer
   val bufferDheapA2 = Queue(wireToDheapA2, bufferSize) // from alu
   val bufferDheapA3 = Queue(wireToDheapA3, bufferSize) // from dheap.sub
-  val arbiterDheapA = Module(new Arbiter(new ActiveApp, 4))
+  // Completed IO requests are always re-injected via DHeap arbitration.
+  val bufferDheapA4 = Queue(wireToDheapA4, bufferSize)
+  val arbiterDheapA = Module(new Arbiter(new ActiveApp, 5))
   val bufferDheapB0 = Queue(reducr.io.out_app, bufferSize) // from reducer
   val bufferDheapB1 = Queue(dheap.io.out_big_drf, bufferSize)
   val arbiterDheapB = Module(new Arbiter(new FrozenApp, 2))
@@ -181,10 +201,18 @@ class Ouros(program: ProgramImage) extends Module {
   val bufferAlu1 = Queue(wireToAlu1, bufferSize) // from dheap.main
   val bufferAlu2 = Queue(wireToAlu2, bufferSize) // from dheap.sub
   val arbiterAlu = Module(new Arbiter(new ActiveApp, 3))
+  // Ready requests leave DHeap only; incoming primitive Apps never bypass it.
+  val bufferIo = Queue(dheap.io.out_io, bufferSize)
+  ioUnit.io.request :<>= bufferIo
+  ioUnit.io.response.ready := false.B
+  when(ioUnit.io.response.valid) {
+    // DHeap forwards non-WHNF over-applied Pair Apps to Reducer itself.
+    wireToDheapA4 :<>= ioUnit.io.response
+  }
   // buffers -> arbiters
   arbiterDheapA.io.in
     .zip(
-      Seq(bufferDheapA0, bufferDheapA1, bufferDheapA2, bufferDheapA3)
+      Seq(bufferDheapA0, bufferDheapA1, bufferDheapA2, bufferDheapA3, bufferDheapA4)
     )
     .foreach { case (a, b) => a :<>= b }
   arbiterDheapB.io.in
@@ -236,6 +264,7 @@ class Ouros(program: ProgramImage) extends Module {
   gc.io.deallocate           :<>= bufferDealloc
   gc.io.heap_read            :<= dheap.io.gc_heap_read
   dheap.io.gc_heap_read_addr :<= gc.io.heap_read_addr
+  gc.io.monitor_io           := ioUnit.io.pending
   gc.io.monitor.valid        := reducr.io.out_spine.valid
   gc.io.monitor.bits         := reducr.io.out_spine.bits
   gc.io.monitor_drf.valid    := dheap.io.out_big_drf.valid
@@ -282,71 +311,38 @@ class PowerOnReset
        |""".stripMargin
   )
 }
-/**
- * FPGA-facing top level.
- *
- * `done` means the Ouros computation has completed.  The final 32-bit result
- * is formatted by UartDumpController and written to the Zynq UltraScale+ PS UART1 through S_AXI_LPD.
- * The PS still needs FSBL/psu_init to enable UART1 MIO, clocks and resets;
- * the AXI controller configures UART framing/baud/TX enable when the
- * first result byte arrives (after Ouros has finished).
- * Default UART1 reference clock: 100 MHz; default output: 115200 8N1.
- */
-class OurosFpga(program: ProgramImage, uartBaseAddr: BigInt = BigInt("ff010000", 16)) extends RawModule {
+/** FPGA-facing Ouros processor: connect its M_AXI to the controller S_AXI in Vivado BD. */
+class OurosFpga(program: ProgramImage) extends RawModule {
   private val axiParams = Axi4LiteParams(addrWidth = 32, dataWidth = 32)
-
   val clock = IO(Input(Clock()))
   val start = IO(Input(Bool()))
   val done  = IO(Output(Bool()))
-
-  // AXI4-Lite master exported as one aggregate interface.  With normal Chisel
-  // aggregate lowering this becomes Vivado-friendly M_AXI_AWADDR,
-  // M_AXI_WDATA, ... ports.
   val M_AXI = IO(Axi4LiteMaster(axiParams))
 
   val por = Module(new PowerOnReset)
   por.io.clock := clock
-
-  val core = withClockAndReset(clock, por.io.reset) {
-    Module(new Ouros(program))
-  }
-  val uartDump = withClockAndReset(clock, por.io.reset) {
-    Module(new UartDumpController)
-  }
-  val uartAxi = withClockAndReset(clock, por.io.reset) {
-    Module(new PsUartAxiController(uartBaseAddr))
-  }
-
+  val core = withClockAndReset(clock, por.io.reset) { Module(new Ouros(program)) }
   core.io.start := start
-  done          := core.io.done
+  done := core.io.done
 
-  uartDump.io.result.valid := core.io.result_valid
-  uartDump.io.result.bits  := core.io.result
-  uartAxi.io.tx             :<>= uartDump.io.tx
-
-  // Forward the controller's master interface to the FPGA boundary.  The
-  // directions are written explicitly because both bundles are master-oriented.
-  M_AXI.AWADDR  := uartAxi.io.axi.AWADDR
-  M_AXI.AWPROT  := uartAxi.io.axi.AWPROT
-  M_AXI.AWVALID := uartAxi.io.axi.AWVALID
-  uartAxi.io.axi.AWREADY := M_AXI.AWREADY
-
-  M_AXI.WDATA  := uartAxi.io.axi.WDATA
-  M_AXI.WSTRB  := uartAxi.io.axi.WSTRB
-  M_AXI.WVALID := uartAxi.io.axi.WVALID
-  uartAxi.io.axi.WREADY := M_AXI.WREADY
-
-  uartAxi.io.axi.BRESP  := M_AXI.BRESP
-  uartAxi.io.axi.BVALID := M_AXI.BVALID
-  M_AXI.BREADY          := uartAxi.io.axi.BREADY
-
-  M_AXI.ARADDR  := uartAxi.io.axi.ARADDR
-  M_AXI.ARPROT  := uartAxi.io.axi.ARPROT
-  M_AXI.ARVALID := uartAxi.io.axi.ARVALID
-  uartAxi.io.axi.ARREADY := M_AXI.ARREADY
-
-  uartAxi.io.axi.RDATA  := M_AXI.RDATA
-  uartAxi.io.axi.RRESP  := M_AXI.RRESP
-  uartAxi.io.axi.RVALID := M_AXI.RVALID
-  M_AXI.RREADY          := uartAxi.io.axi.RREADY
+  // Both are master-oriented interfaces, so forward the channels explicitly.
+  M_AXI.AWADDR := core.io.M_AXI.AWADDR
+  M_AXI.AWPROT := core.io.M_AXI.AWPROT
+  M_AXI.AWVALID := core.io.M_AXI.AWVALID
+  core.io.M_AXI.AWREADY := M_AXI.AWREADY
+  M_AXI.WDATA := core.io.M_AXI.WDATA
+  M_AXI.WSTRB := core.io.M_AXI.WSTRB
+  M_AXI.WVALID := core.io.M_AXI.WVALID
+  core.io.M_AXI.WREADY := M_AXI.WREADY
+  core.io.M_AXI.BRESP := M_AXI.BRESP
+  core.io.M_AXI.BVALID := M_AXI.BVALID
+  M_AXI.BREADY := core.io.M_AXI.BREADY
+  M_AXI.ARADDR := core.io.M_AXI.ARADDR
+  M_AXI.ARPROT := core.io.M_AXI.ARPROT
+  M_AXI.ARVALID := core.io.M_AXI.ARVALID
+  core.io.M_AXI.ARREADY := M_AXI.ARREADY
+  core.io.M_AXI.RDATA := M_AXI.RDATA
+  core.io.M_AXI.RRESP := M_AXI.RRESP
+  core.io.M_AXI.RVALID := M_AXI.RVALID
+  M_AXI.RREADY := core.io.M_AXI.RREADY
 }
