@@ -27,7 +27,7 @@ object SystemConfig {
   val consumers: Int    = consumers_reducer + consumers_dheap
 
   /** cells in the heap */
-  val heapSize = 4 * 1024
+  val heapSize = 8 * 1024
 
   /** thread resource in a core (number of stacks) */
   val maxThreads = 4
@@ -41,7 +41,7 @@ object SystemConfig {
   val frameStkDepth = 64
 
   /** size of the combinator table */
-  val progSize = 1024
+  val progSize = 2 * 1024
 
   /** whether the ALU block is pipelined */
   val AluPipe: Boolean = false
